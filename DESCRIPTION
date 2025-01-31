@@ -1,10 +1,14 @@
 Package: erudiciondb
-Title: What the Package Does (One Line, Title Case)
+Title: Database Configuration and Tools for Storing and Querying Scholars 
+        and Scholarship
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+    person("Ryan", "Raaum", , "ryan.raaum@lehman.cuny.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "https://orcid.org/0000-0003-4723-5475"))
+Description: A database schema for scholarship linked to a specific (small) set 
+                of scholars along with tools for inserting, updating, 
+                querying, and otherwise managing the data along with a 
+                reasonable audit trail.
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
