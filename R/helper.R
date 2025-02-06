@@ -8,7 +8,7 @@
 .initials <- function(strings, return_NA_on_empty = FALSE){
   out = stringi::stri_extract_all_regex(
     str = strings,
-    pattern = "^[A-Za-zÀ-ÖØ-öø-ÿ]|(?:\\-)[A-Za-zÀ-ÖØ-öø-ÿ]|\\s[A-Za-zÀ-ÖØ-öø-ÿ]|[.][A-Za-zÀ-ÖØ-öø-ÿ]",
+    pattern = "^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]|(?:\\-)[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]|\\s[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]|[.][A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]",
     simplify = FALSE,
     omit_no_match = TRUE) # if TRUE, empty list -> "" below
 
