@@ -10,6 +10,7 @@ create_table_functions <- list()
                       other_given_names VARCHAR,
                       ascii_given_names VARCHAR,
                       surnames VARCHAR,
+                      ascii_surnames VARCHAR,
                       surname_particle VARCHAR,
                       drop_particle BOOLEAN,
                       prefix VARCHAR,
@@ -25,7 +26,7 @@ create_table_functions <- list()
                       status VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$persons <- .create_persons_table
@@ -56,7 +57,7 @@ create_table_functions$persons <- .create_persons_table
                       order_priority INTEGER,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$person_roles <- .create_person_roles_table
@@ -83,7 +84,7 @@ create_table_functions$person_roles <- .create_person_roles_table
                       parse_names BOOLEAN,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$item_persons <- .create_item_persons_table
@@ -97,7 +98,7 @@ create_table_functions$item_persons <- .create_item_persons_table
                       personlist_type VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$personlists <- .create_personlists_table
@@ -111,7 +112,7 @@ create_table_functions$personlists <- .create_personlists_table
                       affiliation VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$affiliation_references <- .create_affiliation_references_table
@@ -197,7 +198,7 @@ create_table_functions$affiliation_references <- .create_affiliation_references_
                       year_suffix VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$items <- .create_items_table
@@ -212,7 +213,7 @@ create_table_functions$items <- .create_items_table
                       description VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$issues <- .create_issues_table
@@ -226,7 +227,7 @@ create_table_functions$issues <- .create_issues_table
                       id_value VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$person_identifiers <- .create_person_identifiers_table
@@ -239,7 +240,7 @@ create_table_functions$person_identifiers <- .create_person_identifiers_table
                       id_value VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
-                      updated TIMESTAMPTZ
+                      created TIMESTAMPTZ
   )")
 }
 create_table_functions$item_person_identifiers <- .create_item_person_identifiers_table

@@ -1,5 +1,5 @@
 
-make_db_testcon <- function(dbtype="sqlite", env=parent.frame()) {
+make_testcon <- function(dbtype="sqlite", env=parent.frame()) {
   if (dbtype == "sqlite") {
     testcon <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   } else if (dbtype == "duckdb") {
@@ -12,4 +12,8 @@ make_db_testcon <- function(dbtype="sqlite", env=parent.frame()) {
     envir = env
   )
   testcon
+}
+
+table_columns <- function(con, table_name) {
+  DBI::dbListFields(con, table_name)
 }
