@@ -73,5 +73,13 @@ test_that("object can be inserted and retrieved from database", {
     expect_equal(new_person_1$primary_given_names, retrieved_person_1$primary_given_names)
     expect_equal(new_person_1$other_given_names, retrieved_person_1$other_given_names)
     expect_equal(new_person_1$surnames, retrieved_person_1$surnames)
+
+    # can we pull a specific revision?
+    retrieved_people_2 <- expect_no_condition(.retrieve(testcon, "person", new_person_1_id,
+                                                        rev = 1))
+
+    expect_true(length(retrieved_people_2) == 1)
+    retrieved_person_2 <- retrieved_people_2[[1]]
+    expect_equal(new_person_1$primary_given_names, retrieved_person_2$primary_given_names)
   }
 })

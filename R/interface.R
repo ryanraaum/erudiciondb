@@ -56,7 +56,16 @@
 # object exists in the database, but will only exist here after it is pulled
 #   so need to tell the function what kind of object to pull from the db
 # `by` for searching by something other than the core object id
-.retrieve <- function(connection, object_type, object_id, by=NULL, as_list=TRUE) {
+.retrieve <- function(connection, object_type, object_id,
+                      stage=0, rev="max",
+                      by=NULL, as_list=TRUE) {
+  if (rev == "max") {
+    this_filter <- function(.data) { dplyr::slice_max(.data, .data$revision, n=1) }
+  } else if (rev == "all") {
+    this_filter <- function(.data) { dplyr::filter(.data, TRUE) }
+  } else {
+    this_filter <- function(.data) { dplyr::filter(.data, .data$revision == rev) }
+  }
   table_name <- glue::glue("{object_type}s")
   if (is.null(by)) {
     id_name <- glue::glue("{object_type}_id")
@@ -65,6 +74,8 @@
   }
   object <- dplyr::tbl(connection, table_name) |>
     dplyr::filter(!!rlang::sym(id_name) %in% object_id) |>
+    dplyr::filter(stage == stage) |>
+    this_filter() |>
     dplyr::collect() |>
     dplyr::mutate(object_type = object_type)
 
