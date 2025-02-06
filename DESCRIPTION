@@ -19,8 +19,11 @@ Config/testthat/edition: 3
 Imports: 
     assertthat,
     DBI,
+    dbplyr,
+    dplyr,
     duckdb,
     glue,
+    rlang,
     RSQLite,
     stringi,
     stringr,

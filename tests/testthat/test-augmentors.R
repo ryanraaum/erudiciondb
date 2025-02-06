@@ -6,7 +6,7 @@ test_that(".augment_person works", {
   proto_new_person_1 <- list(primary_given_names = "Tammy",
                            other_given_names = "Sue",
                            surnames = "Sweetie")
-  new_person_1 <- expect_no_condition(.new_object("person", proto_new_person_1, testcon))
+  new_person_1 <- expect_no_condition(.new_object(testcon, "person", proto_new_person_1))
 
   augmented_person_1 <- expect_no_condition(.augment_person(new_person_1))
 
@@ -20,7 +20,7 @@ test_that(".augment_person works", {
 
   proto_new_person_2 <- list(primary_given_names = "Émily Sûe",
                              surnames = "Žoe")
-  new_person_2 <- expect_no_condition(.new_object("person", proto_new_person_2, testcon))
+  new_person_2 <- expect_no_condition(.new_object(testcon, "person", proto_new_person_2))
 
   augmented_person_2 <- expect_no_condition(.augment_person(new_person_2))
 
@@ -35,7 +35,7 @@ test_that(".augment_person works", {
   proto_new_person_3 <- list(primary_given_names = "Juan",
                              non_dropping_particle = "de la",
                              surnames = "Roche")
-  new_person_3 <- expect_no_condition(.new_object("person", proto_new_person_3, testcon))
+  new_person_3 <- expect_no_condition(.new_object(testcon, "person", proto_new_person_3))
 
   augmented_person_3 <- expect_no_condition(.augment_person(new_person_3))
 
