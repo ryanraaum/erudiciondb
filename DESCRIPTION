@@ -23,5 +23,6 @@ Imports:
     glue,
     RSQLite,
     stringi,
+    stringr,
     uuid,
     withr
