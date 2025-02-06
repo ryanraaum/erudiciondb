@@ -8,6 +8,7 @@ create_table_functions <- list()
                       also_known_as BOOLEAN,
                       primary_given_names VARCHAR,
                       other_given_names VARCHAR,
+                      ascii_given_names VARCHAR,
                       surnames VARCHAR,
                       surname_particle VARCHAR,
                       drop_particle BOOLEAN,
@@ -22,10 +23,6 @@ create_table_functions <- list()
                       objective_pronoun VARCHAR,
                       possessive_pronoun VARCHAR,
                       status VARCHAR,
-                      orcid VARCHAR,
-                      scopus VARCHAR,
-                      researcherid VARCHAR,
-                      googlescholar VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
                       updated TIMESTAMPTZ
@@ -75,12 +72,11 @@ create_table_functions$person_roles <- .create_person_roles_table
                       personlist_id UUID,
                       position INTEGER,
                       person_id UUID,
-                      orcid VARCHAR,
                       literal VARCHAR,
                       family VARCHAR,
                       given VARCHAR,
-                      particle VARCHAR,
-                      drop_particle BOOLEAN,
+                      dropping_particle VARCHAR,
+                      non_dropping_particle VARCHAR,
                       suffix VARCHAR,
                       comma_suffix BOOLEAN,
                       static_ordering BOOLEAN,
@@ -234,6 +230,19 @@ create_table_functions$issues <- .create_issues_table
   )")
 }
 create_table_functions$person_identifiers <- .create_person_identifiers_table
+
+.create_item_person_identifiers_table <- function(con) {
+  con |> DBI::dbExecute("CREATE TABLE item_person_identifiers (
+                      item_person_identifier_id UUID,
+                      item_person_id UUID,
+                      id_type VARCHAR,
+                      id_value VARCHAR,
+                      revision INTEGER,
+                      stage INTEGER,
+                      updated TIMESTAMPTZ
+  )")
+}
+create_table_functions$item_person_identifiers <- .create_item_person_identifiers_table
 
 
 ## Exported
