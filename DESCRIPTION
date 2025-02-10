@@ -27,5 +27,6 @@ Imports:
     RSQLite,
     stringi,
     stringr,
+    tibble,
     uuid,
     withr
