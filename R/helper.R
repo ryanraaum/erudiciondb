@@ -1,6 +1,11 @@
 
 ## data helpers
 
+# not vectorized; always returns a single value
+.this_exists <- function(x) {
+  !(all(is.na(x)) || all(is.null(x)) || length(x) == 0)
+}
+
 # starting point derived from https://github.com/rijpma/capelinker (no LICENSE)
 # - among other changes, now
 #   - handles hyphenated names
