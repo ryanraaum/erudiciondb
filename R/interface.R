@@ -59,6 +59,11 @@
 .retrieve <- function(connection, object_type, object_id,
                       stage=0, rev="max",
                       by=NULL, as_list=TRUE) {
+  # which revision to retrieve?
+  # NOTE that this choice is applied AFTER the `stage` filter
+  # - "max" (default) for only the most recent for the selected stage
+  # - "all" for all revisions at the selected stage
+  # - <number> to select a particular revision (that will need to exist at the selected stage)
   if (rev == "max") {
     this_filter <- function(.data) { dplyr::slice_max(.data, .data$revision, n=1) }
   } else if (rev == "all") {
