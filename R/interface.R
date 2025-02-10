@@ -106,7 +106,11 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   where_clauses <- c()
   for (id in names(identifiers)) {
     if (.this_exists(identifiers[[id]])) {
-      where_clauses <- c(where_clauses, glue::glue_sql("{`id`} ILIKE {identifiers[[id]]}", .con = connection))
+      if (isa(connection, "SQLiteConnection")) {
+        where_clauses <- c(where_clauses, glue::glue_sql("{`id`} LIKE {identifiers[[id]]}", .con = connection))
+      } else {
+        where_clauses <- c(where_clauses, glue::glue_sql("{`id`} ILIKE {identifiers[[id]]}", .con = connection))
+      }
     }
   }
   if (length(where_clauses) > 0) {
@@ -118,6 +122,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       result_df <- fetched_results |>
         dplyr::mutate(similarity = 1, found_by = "identifier")
     }
+    DBI::dbClearResult(query_results)
   }
   result_df
 }
@@ -125,17 +130,27 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .find_item_by_year_volume_page <- function(connection, year, volume, first_page) {
   result_df <- EMPTY_FIND_RESULT
   if (.this_exists(year) && .this_exists(volume) && .this_exists(first_page)) {
-    search_query <- glue::glue_sql("
+    if (isa(connection, "SQLiteConnection")) {
+      search_query <- glue::glue_sql("
+        SELECT item_id, stage, revision FROM items
+        WHERE strftime('%Y', issued) = {as.character(year)} AND volume LIKE {as.character(volume)} AND page_first LIKE {as.character(first_page)}",
+                                     .con = connection
+      )
+    } else {
+      search_query <- glue::glue_sql("
       SELECT item_id, stage, revision FROM items
       WHERE year(issued) = {year} AND volume ILIKE {as.character(volume)} AND page_first ILIKE {as.character(first_page)}",
-                                   .con = connection
-    )
+                                     .con = connection
+      )
+
+    }
     query_results <- DBI::dbSendQuery(connection, search_query)
     fetched_results <- DBI::dbFetch(query_results)
     if (nrow(fetched_results) > 0) {
       result_df <- fetched_results |>
         dplyr::mutate(similarity = 1, found_by = "year_volume_page")
     }
+    DBI::dbClearResult(query_results)
   }
   result_df
 }

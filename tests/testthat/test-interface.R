@@ -85,66 +85,68 @@ test_that("object can be inserted and retrieved from database", {
 })
 
 test_that("item can be found by identifiers that are part of citeproc schema", {
-  db <- "duckdb"
-  testcon <- make_testcon(db)
-  expect_no_error(edb_create_tables(testcon))
+  for (db in SUPPORTED_DBS) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
 
-  proto_new_item <- list(title="GenBank",
-                         container_title="Nucleic Acids Research",
-                         container_title_short="Nucleic Acids Res",
-                         volume=44,
-                         issue="D1",
-                         page="D67-D72",
-                         issued=as.Date("20151120", "%Y%m%d"),
-                         doi="10.1093/nar/gkv1276",
-                         pmid="26590407",
-                         pmcid="PMC4702903"
-  )
-  new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
-  new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
 
-  for (id in c("doi", "pmid", "pmcid")) {
-    this_id <- proto_new_item[[id]]
-    found_1 <- expect_no_condition(.find_item_by_identifier(testcon,
-                                                            doi=this_id,
-                                                            pmid=this_id,
-                                                            pmcid=this_id))
-    found_2 <- expect_no_condition(.find(testcon, "item", list(doi=this_id,
-                                                               pmid=this_id,
-                                                               pmcid=this_id)))
-    expect_true(nrow(found_2) == 1)
-    expect_true(found_2$item_id == new_item_id)
+    for (id in c("doi", "pmid", "pmcid")) {
+      this_id <- proto_new_item[[id]]
+      found_1 <- expect_no_condition(.find_item_by_identifier(testcon,
+                                                              doi=this_id,
+                                                              pmid=this_id,
+                                                              pmcid=this_id))
+      found_2 <- expect_no_condition(.find(testcon, "item", list(doi=this_id,
+                                                                 pmid=this_id,
+                                                                 pmcid=this_id)))
+      expect_true(nrow(found_2) == 1)
+      expect_true(found_2$item_id == new_item_id)
+    }
   }
 })
 
 test_that("item can be found by year, volume, and page", {
-  db <- "duckdb"
-  testcon <- make_testcon(db)
-  expect_no_error(edb_create_tables(testcon))
+  for (db in SUPPORTED_DBS) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
 
-  proto_new_item <- list(title="GenBank",
-                         container_title="Nucleic Acids Research",
-                         container_title_short="Nucleic Acids Res",
-                         volume=44,
-                         issue="D1",
-                         page_first="D67",
-                         page="D67-D72",
-                         issued=as.Date("20151120", "%Y%m%d"),
-                         doi="10.1093/nar/gkv1276",
-                         pmid="26590407",
-                         pmcid="PMC4702903"
-  )
-  new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
-  new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
 
-  found_1 <- expect_no_condition(.find_item_by_year_volume_page(testcon,
-                                                                year="2015",
-                                                                volume="44",
-                                                                first_page="D67"))
-  found_2 <- expect_no_condition(.find(testcon, "item", list(issued=as.Date("20151120", "%Y%m%d"),
-                                                             volume="44",
-                                                             page_first="D67")))
-  expect_true(nrow(found_2) == 1)
-  expect_true(found_2$item_id == new_item_id)
+    found_1 <- expect_no_condition(.find_item_by_year_volume_page(testcon,
+                                                                  year="2015",
+                                                                  volume="44",
+                                                                  first_page="D67"))
+    found_2 <- expect_no_condition(.find(testcon, "item", list(issued=as.Date("20151120", "%Y%m%d"),
+                                                               volume="44",
+                                                               page_first="D67")))
+    expect_true(nrow(found_2) == 1)
+    expect_true(found_2$item_id == new_item_id)
+  }
 })
 
