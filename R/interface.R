@@ -155,6 +155,39 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+.find_item_by_title <- function(connection, title) {
+  result_df <- fetched_results <- EMPTY_FIND_RESULT
+
+  if (.this_exists(title)) {
+    search_title_nchar <- nchar(title)
+    if (isa(connection, "SQLiteConnection")) {
+      search_title = title
+
+      # hack to stop package check from complaining
+      item_id <- stage <- revision <- NULL
+
+      result_df <- dplyr::tbl(connection, "items") |>
+        dplyr::select(item_id, stage, revision, title) |>
+        dplyr::collect() |>
+        dplyr::mutate(similarity = 1-stringdist::stringdist(tolower(search_title), substring(tolower(title), 1, search_title_nchar), method="jw")) |>
+        dplyr::select(-title)
+    } else {
+      search_query <- glue::glue_sql("
+    SELECT
+      item_id, stage, revision, jaro_winkler_similarity(lower({title}), substring(lower(title),1,{search_title_nchar})) as similarity
+    FROM items WHERE similarity >= 0.9", .con = connection)
+      query_results <- DBI::dbSendQuery(connection, search_query)
+      fetched_results <- DBI::dbFetch(query_results)
+      DBI::dbClearResult(query_results)
+    }
+    if (nrow(fetched_results) > 0) {
+      result_df <- fetched_results |>
+        dplyr::mutate(found_by = "title")
+    }
+  }
+  result_df
+}
+
 .find <- function(connection, object_type, object_data,
                   stage = 0, revision = "max") {
 
@@ -170,7 +203,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       pmid = object_data$pmid,
       pmcid = object_data$pmcid
     )
-    if (nrow(found) == 0) {
+    if (nrow(found) == 0 && .this_exists(object_data$issued)) {
       found <- .find_item_by_year_volume_page(
         connection = connection,
         year = lubridate::year(object_data$issued),
@@ -178,12 +211,12 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
         first_page = object_data$page_first
       )
     }
-  #   if (nrow(found) == 0) {
-  #     found <- .db_find_item_by_title(
-  #       title = object_data$title,
-  #       con = connection
-  #     )
-  #   }
+    if (nrow(found) == 0) {
+      found <- .find_item_by_title(
+        connection = connection,
+        title = object_data$title
+      )
+    }
   #   if (nrow(found) == 0) {
   #     found <- .db_find_item_by_person(
   #       person_id = object_data$person_id,
