@@ -94,12 +94,14 @@
   apply(object, 1, as.list)
 }
 
+EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
+                               stage = character(0),
+                               revision = character(0),
+                               found_by = character(0),
+                               similarity = numeric(0))
+
 .find_item_by_identifier <- function(connection, doi=NULL, pmid=NULL, pmcid=NULL) {
-  result_df <- tibble::tibble(item_id = character(0),
-                              most_recent = logical(0),
-                              not_deleted = logical(0),
-                              found_by = character(0),
-                              similarity = numeric(0))
+  result_df <- EMPTY_FIND_RESULT
   identifiers <- list(doi=doi, pmid=pmid, pmcid=pmcid)
   where_clauses <- c()
   for (id in names(identifiers)) {
@@ -120,6 +122,23 @@
   result_df
 }
 
+.find_item_by_year_volume_page <- function(connection, year, volume, first_page) {
+  result_df <- EMPTY_FIND_RESULT
+  if (.this_exists(year) && .this_exists(volume) && .this_exists(first_page)) {
+    search_query <- glue::glue_sql("
+      SELECT item_id, stage, revision FROM items
+      WHERE year(issued) = {year} AND volume ILIKE {as.character(volume)} AND page_first ILIKE {as.character(first_page)}",
+                                   .con = connection
+    )
+    query_results <- DBI::dbSendQuery(connection, search_query)
+    fetched_results <- DBI::dbFetch(query_results)
+    if (nrow(fetched_results) > 0) {
+      result_df <- fetched_results |>
+        dplyr::mutate(similarity = 1, found_by = "year_volume_page")
+    }
+  }
+  result_df
+}
 
 .find <- function(connection, object_type, object_data,
                   stage = 0, revision = "max") {
@@ -136,14 +155,14 @@
       pmid = object_data$pmid,
       pmcid = object_data$pmcid
     )
-  #   if (nrow(found) == 0) {
-  #     found <- .db_find_item_by_year_volume_page(
-  #       year = lubridate::year(object_data$issued),
-  #       volume = object_data$volume,
-  #       first_page = object_data$page_first,
-  #       con = connection
-  #     )
-  #   }
+    if (nrow(found) == 0) {
+      found <- .find_item_by_year_volume_page(
+        connection = connection,
+        year = lubridate::year(object_data$issued),
+        volume = object_data$volume,
+        first_page = object_data$page_first
+      )
+    }
   #   if (nrow(found) == 0) {
   #     found <- .db_find_item_by_title(
   #       title = object_data$title,

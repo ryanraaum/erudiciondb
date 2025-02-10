@@ -23,6 +23,7 @@ Imports:
     dplyr,
     duckdb,
     glue,
+    lubridate,
     rlang,
     RSQLite,
     stringi,
