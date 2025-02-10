@@ -150,3 +150,30 @@ test_that("item can be found by year, volume, and page", {
   }
 })
 
+
+test_that("item can be found by title", {
+  for (db in SUPPORTED_DBS) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+
+    found_1 <- expect_no_condition(.find_item_by_title(testcon, title="genbank"))
+    found_2 <- expect_no_condition(.find(testcon, "item", list(title="genbank")))
+    expect_true(nrow(found_2) == 1)
+    expect_true(found_2$item_id == new_item_id)
+  }
+})

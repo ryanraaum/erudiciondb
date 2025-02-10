@@ -26,6 +26,7 @@ Imports:
     lubridate,
     rlang,
     RSQLite,
+    stringdist,
     stringi,
     stringr,
     tibble,
