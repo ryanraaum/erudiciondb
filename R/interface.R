@@ -188,6 +188,32 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+.find_item_by_person <- function(connection, person_id) {
+  result_df <- fetched_results <- EMPTY_FIND_RESULT
+  this_person_id <- person_id
+  item_id <- NULL # hack to silence `check()`
+
+  if (.this_exists(person_id)) {
+    items_tbl <- dplyr::tbl(connection, "items")
+    personlists_tbl <- dplyr::tbl(connection, "personlists")
+    item_persons_tbl <- dplyr::tbl(connection, "item_persons")
+    found_item_ids <- items_tbl |>
+      dplyr::left_join(personlists_tbl, by="item_id", suffix = c("", ".personlist"))  |>
+      dplyr::left_join(item_persons_tbl, by="personlist_id", suffix = c("", ".item_person"))  |>
+      dplyr::filter(person_id %in% this_person_id) |>
+      dplyr::pull(item_id) |>
+      unique()
+    found_items <- items_tbl |>
+      dplyr::filter(item_id %in% found_item_ids) |>
+      dplyr::collect()
+    if (nrow(found_items) > 0) {
+      result_df <- found_items |>
+        dplyr::mutate(similarity = 1, found_by = "person_id")
+    }
+  }
+  result_df
+}
+
 .find <- function(connection, object_type, object_data,
                   stage = 0, revision = "max") {
 
@@ -217,12 +243,12 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
         title = object_data$title
       )
     }
-  #   if (nrow(found) == 0) {
-  #     found <- .db_find_item_by_person(
-  #       person_id = object_data$person_id,
-  #       con = connection
-  #     )
-  #   }
+    if (nrow(found) == 0) {
+      found <- .find_item_by_person(
+        connection = connection,
+        person_id = object_data$person_id
+      )
+    }
   # } else if (object_type == "person_identifier") {
   #   found <- .db_find_person_identifier(object_data, connection)
   }
