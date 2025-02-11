@@ -225,6 +225,7 @@ create_table_functions$issues <- .create_issues_table
                       person_id UUID,
                       id_type VARCHAR,
                       id_value VARCHAR,
+                      id_value_uppercase VARCHAR,
                       revision INTEGER,
                       stage INTEGER,
                       created TIMESTAMP DEFAULT current_timestamp

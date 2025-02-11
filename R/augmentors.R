@@ -54,3 +54,12 @@ AUGMENTORS <- list()
   new_p
 }
 AUGMENTORS[["person"]] <- .augment_person
+
+
+.augment_person_identifier <- function(new_pid) {
+  if (is.na(new_pid$id_value_uppercase) && .this_exists(new_pid$id_value)) {
+    new_pid$id_value_uppercase <- toupper(new_pid$id_value)
+  }
+  new_pid
+}
+AUGMENTORS[["person_identifier"]] <- .augment_person_identifier
