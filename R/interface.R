@@ -39,6 +39,42 @@
   }
 }
 
+.next_revision <- function(connection, object_type, object_id) {
+  object_table <- glue::glue("{object_type}s")
+  object_id_name <- glue::glue("{object_type}_id")
+  current_max <- dplyr::tbl(connection, object_table) |>
+    dplyr::filter(!!rlang::sym(object_id_name) == object_id) |>
+    dplyr::pull(revision) |>
+    max()
+  current_max + 1
+}
+
+.revise_object <- function(connection, this_object, ...) {
+  object_type <- this_object$object_type
+  if (!.this_exists(object_type)) {
+    stop("No `object_type` to be found - is this object properly formed?")
+  }
+  object_id_name <- glue::glue("{object_type}_id")
+  if (!.this_exists(this_object[[object_id_name]])) {
+    msg <- glue::glue("No `{object_id_name}` - does this object exist in the database?")
+    stop(msg)
+  }
+
+  object_table_name <- glue::glue("{object_type}s")
+  object_table_columns <- DBI::dbListFields(connection, object_table_name)
+
+  submitted_updates <- list(...)
+  updateable_names <- base::intersect(setdiff(object_table_columns, object_id_name), names(submitted_updates))
+
+  updated_object <- this_object
+  for (this_var in updateable_names) {
+    updated_object[[this_var]] <- .update_it(this_object, this_var, submitted_updates[[this_var]])
+  }
+
+  updated_object
+}
+
+
 # object exists and has been validated, so `object_type` is set in the object
 .insert_one <- function(connection, object) {
   object_type <- object$object_type

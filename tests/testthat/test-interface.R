@@ -263,3 +263,31 @@ test_that("person_identifier can be found", {
 
   }
 })
+
+test_that(".revise_object properly updates existing objects", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+
+    expect_equal(.next_revision(testcon, "item", new_item_id), 2)
+
+    revised_item <- expect_no_condition(.revise_object(testcon, new_item, title="Genbank"))
+    expect_equal(new_item$title, "GenBank")
+    expect_equal(revised_item$title, "Genbank")
+  }
+})

@@ -45,6 +45,14 @@
   paste0(surname, year, title)
 }
 
+.update_it <- function(this_object, this_variable, this_value) {
+  if (is.na(this_value)) {
+    return(this_object[[this_variable]])
+  }
+  this_value
+}
+
+
 
 ## test helpers
 
