@@ -50,3 +50,7 @@ table_columns <- function(con, table_name) {
   DBI::dbListFields(con, table_name)
 }
 
+supported_databases <- function(just_this_one=NULL) {
+  if (is.null(just_this_one)) {return(c("duckdb", "sqlite"))}
+  return(just_this_one)
+}
