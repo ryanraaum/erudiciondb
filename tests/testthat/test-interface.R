@@ -224,3 +224,42 @@ test_that("item can be found by person", {
     expect_true(found_2$item_id == new_item_id)
   }
 })
+
+test_that("person_identifier can be found", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    proto_person_identifier <- list(person_id = uuid::UUIDgenerate(),
+                                    id_type="testing_identifier",
+                                    id_value="aBcD123/eFF.25")
+    new_person_identifier <- expect_no_condition(.new_object(testcon, "person_identifier",
+                                                             proto_person_identifier,
+                                                             augment_function = .augment_person_identifier))
+    new_person_identifier_id <- expect_no_condition(.insert_one(testcon, new_person_identifier))
+
+    found_by_id <- expect_no_condition(.find_person_identifier(testcon, list(id_value="aBcD123/eFF.25")))
+    expect_true(nrow(found_by_id) == 1)
+    expect_true(found_by_id$person_identifier_id == new_person_identifier_id)
+    found_by_id_2 <- expect_no_condition(.find(testcon, "person_identifier", list(id_value="aBcD123/eFF.25")))
+    expect_true(nrow(found_by_id_2) == 1)
+    expect_true(found_by_id_2$person_identifier_id == new_person_identifier_id)
+
+    found_by_type_and_person <- expect_no_condition(.find_person_identifier(testcon, list(id_type="testing_identifier",
+                                                                                          person_id=proto_person_identifier$person_id)))
+    expect_true(nrow(found_by_type_and_person) == 1)
+    expect_true(found_by_type_and_person$person_identifier_id == new_person_identifier_id)
+    found_by_type_and_person_2 <- expect_no_condition(.find(testcon, "person_identifier", list(id_type="testing_identifier",
+                                                                                          person_id=proto_person_identifier$person_id)))
+    expect_true(nrow(found_by_type_and_person_2) == 1)
+    expect_true(found_by_type_and_person_2$person_identifier_id == new_person_identifier_id)
+
+    found_by_person_id <- expect_no_condition(.find_person_identifier(testcon, list(person_id=proto_person_identifier$person_id)))
+    expect_true(nrow(found_by_person_id) == 1)
+    expect_true(found_by_person_id$person_identifier_id == new_person_identifier_id)
+    found_by_person_id_2 <- expect_no_condition(.find(testcon, "person_identifier", list(person_id=proto_person_identifier$person_id)))
+    expect_true(nrow(found_by_person_id_2) == 1)
+    expect_true(found_by_person_id_2$person_identifier_id == new_person_identifier_id)
+
+  }
+})

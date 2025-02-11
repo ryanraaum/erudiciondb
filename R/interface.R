@@ -214,6 +214,37 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+.find_person_identifier <- function(connection, object_data) {
+  found <- tibble::tibble()
+  id_value_uppercase <- id_type <- person_id <- NULL # to silence `check()`
+  if (.this_exists(object_data$id_value)) {
+    result_df <- dplyr::tbl(connection, "person_identifiers") |>
+      dplyr::filter(id_value_uppercase == toupper(object_data$id_value)) |>
+      dplyr::collect()
+    if (nrow(result_df) > 0) {
+      found <- result_df |>
+        dplyr::mutate(similarity = 1, found_by = "identifier")
+    }
+  } else if (.this_exists(object_data$id_type) && .this_exists(object_data$person_id)) {
+    result_df <- dplyr::tbl(connection, "person_identifiers") |>
+      dplyr::filter(id_type == object_data$id_type, person_id == object_data$person_id) |>
+      dplyr::collect()
+    if (nrow(result_df) > 0) {
+      found <- result_df |>
+        dplyr::mutate(similarity = 1, found_by = "person_and_type")
+    }
+  } else if (.this_exists(object_data$person_id)) {
+    result_df <- dplyr::tbl(connection, "person_identifiers") |>
+      dplyr::filter(person_id == object_data$person_id) |>
+      dplyr::collect()
+    if (nrow(result_df) > 0) {
+      found <- result_df |>
+        dplyr::mutate(similarity = 1, found_by = "person_id")
+    }
+  }
+  found
+}
+
 .find <- function(connection, object_type, object_data,
                   stage = 0, revision = "max") {
 
@@ -249,8 +280,8 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
         person_id = object_data$person_id
       )
     }
-  # } else if (object_type == "person_identifier") {
-  #   found <- .db_find_person_identifier(object_data, connection)
+  } else if (object_type == "person_identifier") {
+    found <- .find_person_identifier(connection, object_data)
   }
 
   found <- found |>
