@@ -1,7 +1,6 @@
-SUPPORTED_DBS <- c("sqlite", "duckdb")
 
 test_that(".new_object has minimal function", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -30,7 +29,7 @@ test_that(".new_object has minimal function", {
 })
 
 test_that(".new_object throws error for unknown columns", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -54,7 +53,7 @@ test_that(".new_object throws error for unknown columns", {
 })
 
 test_that("object can be inserted and retrieved from database", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -85,7 +84,7 @@ test_that("object can be inserted and retrieved from database", {
 })
 
 test_that("item can be found by identifiers that are part of citeproc schema", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -119,7 +118,7 @@ test_that("item can be found by identifiers that are part of citeproc schema", {
 })
 
 test_that("item can be found by year, volume, and page", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -152,7 +151,7 @@ test_that("item can be found by year, volume, and page", {
 
 
 test_that("item can be found by title", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
@@ -180,7 +179,7 @@ test_that("item can be found by title", {
 
 
 test_that("item can be found by person", {
-  for (db in SUPPORTED_DBS) {
+  for (db in supported_databases()) {
     testcon <- make_testcon(db)
     expect_no_error(edb_create_tables(testcon))
 
