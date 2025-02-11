@@ -65,3 +65,18 @@ test_that(".augment_person_identifier works", {
     expect_equal(augmented_person_identifier$id_value_uppercase, toupper(augmented_person_identifier$id_value))
   }
 })
+
+
+test_that(".augment_item_plus works", {
+  item <- list(citation_key = NA,
+               issued = as.Date("20151120", "%Y%m%d"),
+               title = "GenBank")
+  creator_person <- list(family="Clark", given="Karen")
+  creator_institution <- list(literal="International HapMap Consortium")
+
+  augmented_person <- expect_no_condition(.augment_item_plus(item, creator_person))
+  expect_equal(augmented_person$citation_key, "Clark2015Genbank")
+  augmented_institution <- expect_no_condition(.augment_item_plus(item, creator_institution))
+  expect_equal(augmented_institution$citation_key, "InternationalHapMapConsortium2015Genbank")
+})
+

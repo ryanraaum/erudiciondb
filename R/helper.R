@@ -28,6 +28,23 @@
   sapply(out, stringi::stri_join, collapse = "")
 }
 
+.word_from_title <- function(title, n=1) {
+  title_words <- tolower(strsplit(title, "\\s+")[[1]])
+  is_stop_word <- title_words %in% stopwords::stopwords()
+  nonstop_title_words <- title_words[!is_stop_word]
+  stringr::str_to_title(nonstop_title_words)[seq_len(n)]
+}
+
+.make_citekey <- function(surname, year, title, n=1) {
+  surname <- stringi::stri_trans_general(surname, id = "Latin-ASCII")
+  surname <- strsplit(surname, "\\W+")[[1]]
+  surname <- paste(surname, collapse="")
+  title <- stringi::stri_trans_general(title, id = "Latin-ASCII")
+  title <- .word_from_title(title, n=n)
+  title <- paste(title, collapse="")
+  paste0(surname, year, title)
+}
+
 
 ## test helpers
 

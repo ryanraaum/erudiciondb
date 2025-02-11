@@ -1,3 +1,6 @@
+
+## Standalone Augmentors (no extra data required)
+
 AUGMENTORS <- list()
 
 .augment_person <- function(new_p) {
@@ -55,7 +58,6 @@ AUGMENTORS <- list()
 }
 AUGMENTORS[["person"]] <- .augment_person
 
-
 .augment_person_identifier <- function(new_pid) {
   if (is.na(new_pid$id_value_uppercase) && .this_exists(new_pid$id_value)) {
     new_pid$id_value_uppercase <- toupper(new_pid$id_value)
@@ -63,3 +65,28 @@ AUGMENTORS[["person"]] <- .augment_person
   new_pid
 }
 AUGMENTORS[["person_identifier"]] <- .augment_person_identifier
+
+
+## Insertion Augmentors ("plus" extra data)
+
+# `creator` is a list with item_person data
+.augment_item_plus <- function(new_item, creator) {
+  if (is.na(new_item$citation_key)) {
+
+    citekey_surname <- creator$family
+    if (is.null(citekey_surname)) { citekey_surname <- creator$literal }
+    if (is.null(citekey_surname)) { stop("No viable creator name for citekey") }
+
+    if (!.this_exists(new_item$issued) && lubridate::is.Date(new_item$issued)) {
+      stop("No viable publication date")
+    }
+    citekey_year <- lubridate::year(new_item$issued)
+
+    citekey_title <- new_item$title
+
+    this_citekey <- .make_citekey(citekey_surname, citekey_year, citekey_title)
+    new_item$citation_key <- this_citekey
+  }
+
+  new_item
+}

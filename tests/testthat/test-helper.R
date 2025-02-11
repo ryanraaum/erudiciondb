@@ -26,4 +26,14 @@ test_that(".initials makes initials", {
   expect_equal(.initials("Bah-Humbug"), "B-H")
 })
 
+test_that(".word_from_title extracts word(s) from title", {
+  expect_equal(.word_from_title("Future Islands"), "Future")
+  expect_equal(.word_from_title("The Future Islands"), "Future")
+  expect_equal(.word_from_title("Future Islands", n=2), c("Future","Islands"))
+  expect_equal(.word_from_title("The Future Islands", n=2), c("Future","Islands"))
+})
 
+test_that(".make_citekey works", {
+  expect_equal(.make_citekey("Clark", "2015", "GenBank"), "Clark2015Genbank")
+  expect_equal(.make_citekey("Clark", "2015", "The GenBank"), "Clark2015Genbank")
+})
