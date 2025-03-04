@@ -44,7 +44,7 @@
   object_id_name <- glue::glue("{object_type}_id")
   current_max <- dplyr::tbl(connection, object_table) |>
     dplyr::filter(!!rlang::sym(object_id_name) == object_id) |>
-    dplyr::pull(revision) |>
+    dplyr::pull("revision") |>
     max()
   current_max + 1
 }
@@ -71,9 +71,28 @@
     updated_object[[this_var]] <- .update_it(this_object, this_var, submitted_updates[[this_var]])
   }
 
+  updated_object$revision <- .next_revision(connection, object_type, this_object[[object_id_name]])
+
   updated_object
 }
 
+# "update" = *revise* and then *insert* object into database
+# - in this process, will also deactivate (stage = -1) current object in db
+.update_object <- function(connection, this_object, ...) {
+  revised_object <- .revise_object(connection, this_object, ...)
+  DBI::dbBegin(connection)
+  object_insertions_outcome <- try({
+    revised_object_id <- .insert_one(connection, revised_object)
+    unstaging_outcome <- .destage_one(connection, this_object)
+    if (!unstaging_outcome) { stop("destaging error") }
+  }, silent=TRUE)
+  if (inherits(object_insertions_outcome, "try-error")) {
+    DBI::dbRollback(connection)
+    return(NULL)
+  }
+  DBI::dbCommit(connection)
+  revised_object_id
+}
 
 # object exists and has been validated, so `object_type` is set in the object
 .insert_one <- function(connection, object) {
@@ -88,6 +107,19 @@
   nrows_affected <- DBI::dbExecute(connection, insert_statement)
   object[[object_id]]
 }
+
+# object exists in the database
+.destage_one <- function(connection, object) {
+  object_type <- object$object_type
+  table_name <- glue::glue("{object_type}s")
+  object_id_name <- glue::glue("{object_type}_id")
+  object_id <- object[[object_id_name]]
+  update_statement <- glue::glue_sql("UPDATE {`table_name`} SET stage = -1 WHERE {`object_id_name`} = {object_id} AND revision = {object$revision}",
+                                     .con = connection)
+  nrows_affected <- DBI::dbExecute(connection, update_statement)
+  return(nrows_affected == 1)
+}
+
 
 # which revision to retrieve?
 # NOTE that this choice is applied AFTER the `stage` filter

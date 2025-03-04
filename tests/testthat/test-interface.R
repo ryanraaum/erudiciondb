@@ -291,3 +291,68 @@ test_that(".revise_object properly updates existing objects", {
     expect_equal(revised_item$title, "Genbank")
   }
 })
+
+test_that(".destage_one properly destages object in database", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+
+    databased_object_list <- expect_no_condition(.retrieve(testcon, "item", new_item_id))
+    expect_equal(length(databased_object_list), 1)
+    databased_object <- databased_object_list[[1]]
+
+    expect_true(.destage_one(testcon, databased_object))
+
+    destaged_object <- expect_no_condition(.retrieve(testcon, "item", new_item_id, stage=-1))[[1]]
+    expect_equal(destaged_object$stage, "-1")
+  }
+})
+
+test_that(".update_object does what it should", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+
+    databased_object_list <- expect_no_condition(.retrieve(testcon, "item", new_item_id))
+    expect_equal(length(databased_object_list), 1)
+    databased_object <- databased_object_list[[1]]
+
+    new_title <- "It's a me, GenBank"
+    updated_object_id <- expect_no_condition(.update_object(testcon, databased_object, title=new_title))
+    expect_equal(updated_object_id, new_item_id)
+
+    updated_object <- expect_no_condition(.retrieve(testcon, "item", updated_object_id))[[1]]
+    expect_equal(updated_object$title, new_title)
+  }
+})
+
