@@ -367,3 +367,43 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .make_check_dbplyr_note_go_away <- function(con) {
   dbplyr::dbplyr_edition(con)
 }
+
+## Singleton DB Interface Object
+
+.erudicion_db <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::Singleton,
+  public = list(
+  pool = NULL,
+  validators = NULL, #VALIDATORS,
+  augmentors = AUGMENTORS,
+  initialize = function(dbargs_list = DBARGS) {
+    # super$initialize()
+    self$establish_connection(dbargs_list)
+  },
+  establish_connection = function(dbargs_list) {
+    if (is.null(self$pool) || !dbIsValid(self$pool)) {
+      self$pool <- do.call(pool::"dbPool", dbargs_list)
+    }
+    invisible(self)
+  },
+  disconnect = function() {
+    if (!is.null(self$pool)) {
+      pool::poolClose(self$pool)
+      self$pool <- NULL
+    }
+  },
+  finalize = function() {
+    self$disconnect()
+  },
+  tbl = function(tbl_name) {
+    return(dplyr::tbl(self$pool, tbl_name))
+  }
+),
+active = list(
+  con = function(value) {
+    if (missing(value)) {
+      self$pool
+    } else {
+      stop("`$con` is read only", call. = FALSE)
+    }
+  }
+))

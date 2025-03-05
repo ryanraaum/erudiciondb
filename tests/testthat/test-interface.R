@@ -356,3 +356,21 @@ test_that(".update_object does what it should", {
   }
 })
 
+test_that(".erudicion_db object has basic functionality", {
+  for (db in supported_databases()) {
+    this_dbobj <- expect_no_condition(make_testdbobj(db))
+    expect_true(inherits(this_dbobj$pool, "Pool"))
+    expect_true(inherits(this_dbobj$con, "Pool"))
+    expect_no_error(edb_create_tables(this_dbobj$con))
+    items_tbl <- expect_no_error(this_dbobj$tbl("items"))
+    expect_true(inherits(items_tbl, "tbl"))
+    expect_equal(0, this_dbobj$tbl("items") |> dplyr::count() |> dplyr::pull(n))
+  }
+})
+
+
+test_that("testing stub", {
+  for (db in supported_databases()) {
+    expect_true(is.character(db))
+  }
+})
