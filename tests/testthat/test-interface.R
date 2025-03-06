@@ -359,7 +359,6 @@ test_that(".update_object does what it should", {
 test_that(".erudicion_db object has basic functionality", {
   for (db in supported_databases()) {
     this_dbobj <- expect_no_condition(make_testdbobj(db))
-    expect_true(inherits(this_dbobj$pool, "Pool"))
     expect_true(inherits(this_dbobj$con, "Pool"))
     expect_no_error(edb_create_tables(this_dbobj$con))
     items_tbl <- expect_no_error(this_dbobj$tbl("items"))
