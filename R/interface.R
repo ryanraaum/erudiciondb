@@ -384,50 +384,68 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     augmentors = AUGMENTORS
   ),
   public = list(
+    #' @description
     #' Create new ErudicionDB object
     #'
-    #' @param dbargs_list
-    #'
-    #' @returns
-    #' @export
-    #'
-    #' @examples
+    #' @param dbargs_list A list of parameters to create the database
     initialize = function(dbargs_list = DBARGS) {
       # super$initialize()
       self$establish_connection(dbargs_list)
     },
+    #' @description
+    #' Create ErudicionDB object and connect to a database
+    #'
+    #' @param dbargs_list A list of parameters to create the database
     establish_connection = function(dbargs_list) {
       if (is.null(private$pool) || !dbIsValid(private$pool)) {
         private$pool <- do.call(pool::"dbPool", dbargs_list)
       }
       invisible(self)
     },
+    #' @description
+    #' Disconnect from a database
+    #'
+    #' @returns Nothing
     disconnect = function() {
       if (!is.null(private$pool)) {
         pool::poolClose(private$pool)
         private$pool <- NULL
       }
     },
+    #' @description
+    #' Clean up after removal of ErudicionDB object
     finalize = function() {
       self$disconnect()
     },
+    #' @description
+    #' Generate a data frame interface to a database table
+    #'
+    #' @param tbl_name A database table name
     tbl = function(tbl_name) {
       return(dplyr::tbl(private$pool, tbl_name))
     },
+    #' @description
+    #' Add a function to validate a new database table entry
+    #'
+    #' @param for_what The singular name of the table
+    #' @param validate_function A function
     add_validator = function(for_what, validate_function) {
       private$validators[[for_what]] <- validate_function
     },
+    #' @description
+    #' Add a function to augment a new database table entry
+    #'
+    #' @param for_what The singular name of the table
+    #' @param augment_function A function
     add_augmentor = function(for_what, augment_function) {
       private$augmentors[[for_what]] <- augment_function
     }
   ),
   active = list(
-    con = function(value) {
-      if (missing(value)) {
+    #' @field con
+    #' ErudicionDB. Read-only.
+    con = function() {
         private$pool
-      } else {
-        stop("`$con` is read only", call. = FALSE)
-      }
     }
   )
 )
