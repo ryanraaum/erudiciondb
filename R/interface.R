@@ -375,6 +375,8 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 #' @description
 #' Interface for an ErudicionDB.
 #'
+#' @export
+#'
 #' @include augmentors.R
 #' @include validators.R
 ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::Singleton,
