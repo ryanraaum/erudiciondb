@@ -71,6 +71,21 @@ make_testcon <- function(dbtype="sqlite", env=parent.frame()) {
   testcon
 }
 
+make_testpool <- function(dbtype="sqlite", env=parent.frame()) {
+  if (dbtype == "sqlite") {
+    testcon <- pool::dbPool(RSQLite::SQLite(), dbdir=":memory:")
+  } else if (dbtype == "duckdb") {
+    testcon <- pool::dbPool(duckdb::duckdb(), dbdir=":memory:")
+  } else {
+    stop(glue::glue("not a known dbtype: '{dbtype}'"))
+  }
+  withr::defer(
+    pool::poolClose(testcon),
+    envir = env
+  )
+  testcon
+}
+
 make_testdbobj <- function(dbtype="sqlite", env=parent.frame()) {
   if (dbtype == "sqlite") {
     dbobj <- .erudicion_db$new(list(drv=RSQLite::SQLite(), dbdir=":memory:"))
