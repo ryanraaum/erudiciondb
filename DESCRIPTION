@@ -34,3 +34,9 @@ Imports:
     tibble,
     uuid,
     withr
+Collate: 
+    'augmentors.R'
+    'create_tables.R'
+    'helper.R'
+    'validators.R'
+    'interface.R'

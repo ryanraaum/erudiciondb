@@ -368,15 +368,30 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   dbplyr::dbplyr_edition(con)
 }
 
-## Singleton DB Interface Object
+## DB Interface Object
 
-.erudicion_db <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::Singleton,
+#' @title ErudicionDB Object
+#'
+#' @description
+#' Interface for an ErudicionDB.
+#'
+#' @include augmentors.R
+#' @include validators.R
+ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::Singleton,
   private = list(
     pool = NULL,
-    validators = NULL, #VALIDATORS,
+    validators = VALIDATORS,
     augmentors = AUGMENTORS
   ),
   public = list(
+    #' Create new ErudicionDB object
+    #'
+    #' @param dbargs_list
+    #'
+    #' @returns
+    #' @export
+    #'
+    #' @examples
     initialize = function(dbargs_list = DBARGS) {
       # super$initialize()
       self$establish_connection(dbargs_list)
@@ -398,6 +413,12 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     },
     tbl = function(tbl_name) {
       return(dplyr::tbl(private$pool, tbl_name))
+    },
+    add_validator = function(for_what, validate_function) {
+      private$validators[[for_what]] <- validate_function
+    },
+    add_augmentor = function(for_what, augment_function) {
+      private$augmentors[[for_what]] <- augment_function
     }
   ),
   active = list(

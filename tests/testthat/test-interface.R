@@ -367,6 +367,18 @@ test_that(".erudicion_db object has basic functionality", {
   }
 })
 
+# this is a pretty weak test - only verifies that the functions exist
+# and don't immediately explode
+test_that("dbobj$add_augmentor and dbobj$add_validator work", {
+  for (db in supported_databases()) {
+    this_dbobj <- expect_no_condition(make_testdbobj(db))
+    test_augmentor <- function(x) {x}
+    expect_no_error(this_dbobj$add_augmentor("test", test_augmentor))
+    test_validator <- function(x) {TRUE}
+    expect_no_error(this_dbobj$add_validator("test", test_validator))
+  }
+})
+
 
 test_that("testing stub", {
   for (db in supported_databases()) {
