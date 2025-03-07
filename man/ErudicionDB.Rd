@@ -26,6 +26,10 @@ Interface for an ErudicionDB.
 \item \href{#method-erudicion_db_object-tbl}{\code{ErudicionDB$tbl()}}
 \item \href{#method-erudicion_db_object-add_validator}{\code{ErudicionDB$add_validator()}}
 \item \href{#method-erudicion_db_object-add_augmentor}{\code{ErudicionDB$add_augmentor()}}
+\item \href{#method-erudicion_db_object-new_object}{\code{ErudicionDB$new_object()}}
+\item \href{#method-erudicion_db_object-insert_object}{\code{ErudicionDB$insert_object()}}
+\item \href{#method-erudicion_db_object-insert_new_object}{\code{ErudicionDB$insert_new_object()}}
+\item \href{#method-erudicion_db_object-retrieve}{\code{ErudicionDB$retrieve()}}
 \item \href{#method-erudicion_db_object-clone}{\code{ErudicionDB$clone()}}
 }
 }
@@ -35,7 +39,7 @@ Interface for an ErudicionDB.
 \subsection{Method \code{new()}}{
 Create new ErudicionDB object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new(dbargs_list = DBARGS)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new(dbargs_list)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -134,6 +138,99 @@ Add a function to augment a new database table entry
 \item{\code{for_what}}{The singular name of the table}
 
 \item{\code{augment_function}}{A function}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-new_object"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-new_object}{}}}
+\subsection{Method \code{new_object()}}{
+Create a new object for the database
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new_object(object_type, object_data, stage = 0)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{object_type}}{The singular name of the table}
+
+\item{\code{object_data}}{A list with the object data}
+
+\item{\code{stage}}{Staging level in the database (default 0=active)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-insert_object"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-insert_object}{}}}
+\subsection{Method \code{insert_object()}}{
+Insert a new object into the database
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$insert_object(object)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{object}}{A properly created object (list)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-insert_new_object"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-insert_new_object}{}}}
+\subsection{Method \code{insert_new_object()}}{
+Create a new object and insert it into the database
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$insert_new_object(object_type, object_data, stage = 0)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{object_type}}{The singular name of the table}
+
+\item{\code{object_data}}{A list with the object data}
+
+\item{\code{stage}}{Staging level in the database (default 0=active)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-retrieve"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-retrieve}{}}}
+\subsection{Method \code{retrieve()}}{
+Retrieve an object from the database
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$retrieve(
+  object_type,
+  object_id,
+  stage = 0,
+  revision = "max",
+  by = NULL,
+  as_list = TRUE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{object_type}}{The singular name of the table}
+
+\item{\code{object_id}}{The id (key) for the object}
+
+\item{\code{stage}}{Staging level in the database (default 0=active)}
+
+\item{\code{revision}}{Revision of the object (default "max"=latest)}
+
+\item{\code{by}}{Retrieve by something other than object_id (default NULL=no)}
+
+\item{\code{as_list}}{Return results as a list, not a data frame (default TRUE)}
 }
 \if{html}{\out{</div>}}
 }

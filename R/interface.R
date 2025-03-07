@@ -383,14 +383,17 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
   private = list(
     pool = NULL,
     validators = VALIDATORS,
-    augmentors = AUGMENTORS
+    augmentors = AUGMENTORS,
+    insert_new_item = function(object_data) {
+      stop("not implemented")
+    }
   ),
   public = list(
     #' @description
     #' Create new ErudicionDB object
     #'
     #' @param dbargs_list A list of parameters to create the database
-    initialize = function(dbargs_list = DBARGS) {
+    initialize = function(dbargs_list) {
       # super$initialize()
       self$establish_connection(dbargs_list)
     },
@@ -441,6 +444,55 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     #' @param augment_function A function
     add_augmentor = function(for_what, augment_function) {
       private$augmentors[[for_what]] <- augment_function
+    },
+    #' @description
+    #' Create a new object for the database
+    #'
+    #' @param object_type The singular name of the table
+    #' @param object_data A list with the object data
+    #' @param stage Staging level in the database (default 0=active)
+    new_object = function(object_type, object_data, stage=0) {
+      .new_object(self$con, object_type, object_data,
+                  validate_function = private$validators[[object_type]],
+                  augment_function = private$augmentors[[object_type]],
+                  stage = stage
+      )
+    },
+    #' @description
+    #' Insert a new object into the database
+    #'
+    #' @param object A properly created object (list)
+    insert_object = function(object) {
+      .insert_one(self$con, object)
+    },
+    #' @description
+    #' Create a new object and insert it into the database
+    #'
+    #' @param object_type The singular name of the table
+    #' @param object_data A list with the object data
+    #' @param stage Staging level in the database (default 0=active)
+    insert_new_object = function(object_type, object_data, stage=0) {
+      if (object_type == "item" && "item" %in% names(object_data)) {
+        private$insert_new_item(object_data)
+      } else {
+        self$insert_object(self$new_object(object_type, object_data, stage=stage))
+      }
+    },
+    #' @description
+    #' Retrieve an object from the database
+    #'
+    #' @param object_type The singular name of the table
+    #' @param object_id The id (key) for the object
+    #' @param stage Staging level in the database (default 0=active)
+    #' @param revision Revision of the object (default "max"=latest)
+    #' @param by Retrieve by something other than object_id (default NULL=no)
+    #' @param as_list Return results as a list, not a data frame (default TRUE)
+    retrieve = function(object_type, object_id,
+                        stage=0, revision="max",
+                        by=NULL, as_list=TRUE) {
+      .retrieve(self$con, object_type=object_type, object_id=object_id,
+                stage=stage, revision=revision,
+                by=by, as_list=as_list)
     }
   ),
   active = list(
