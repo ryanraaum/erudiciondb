@@ -45,6 +45,66 @@
   paste0(surname, year, title)
 }
 
+# these are ordered (badly and incompletely, by me) by preference for citation key label
+valid_personlist_types <- c(
+  "author",
+  "editor",
+  "translator",
+  "director",
+  "performer",
+  "chair",
+  "organizer",
+  "collection-editor",
+  "compiler",
+  "composer",
+  "container-author",
+  "contributor",
+  "curator",
+  "editorial-director",
+  "executive-producer",
+  "guest",
+  "host",
+  "interviewer",
+  "illustrator",
+  "narrator",
+  "original-author",
+  "producer",
+  "recipient",
+  "reviewed-author",
+  "script-writer",
+  "series-creator"
+)
+
+# `item_data` is the object created by the `repo2cp` parsers
+# here, we are selecting the "best" surname for the citekey
+.select_surname <- function(item_data) {
+  personlists <- base::intersect(valid_personlist_types, names(item_data))
+  plists_order <- match(personlists, valid_personlist_types)
+  which_preferred <- which(plists_order == min(plists_order))
+  preferred <- personlists[which_preferred]
+  first_person <- item_data[[preferred]][[1]]
+  if (.this_exists(first_person$family)) { return(first_person$family) }
+  if (.this_exists(first_person$literal)) { return(first_person$literal) }
+  stop("cannot find name for citation key")
+}
+
+# `item_data` is the object created by the `repo2cp` parsers
+# this doesn't really require a separate function, but it is here to
+#   throw an identifiable error for items that might not have an `issued` date
+.select_year <- function(item_data) {
+  if (.this_exists(item_data$item$issued)) { return(lubridate::year(item_data$item$issued))}
+  stop("cannot find year for citation key")
+}
+
+# `item_data` is the object created by the `repo2cp` parsers
+# this doesn't really require a separate function, but it is here to
+#   throw an identifiable error for items that might not have a `title`
+#   (if that is possible?)
+.select_title <- function(item_data) {
+  if (.this_exists(item_data$item$title)) { return(item_data$item$title)}
+  stop("cannot find title for citation key")
+}
+
 .update_it <- function(this_object, this_variable, this_value) {
   if (is.na(this_value)) {
     return(this_object[[this_variable]])

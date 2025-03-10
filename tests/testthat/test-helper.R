@@ -37,3 +37,26 @@ test_that(".make_citekey works", {
   expect_equal(.make_citekey("Clark", "2015", "GenBank"), "Clark2015Genbank")
   expect_equal(.make_citekey("Clark", "2015", "The GenBank"), "Clark2015Genbank")
 })
+
+test_that(".select_surname works", {
+  test_item_1 <- list(author=list(list(family="Clark")))
+  test_item_2 <- list(author=list(list(literal="The International HapMap Consortium")))
+  test_item_3 <- list(author=list(list(given="Jeremy")))
+  expect_equal(.select_surname(test_item_1), "Clark")
+  expect_equal(.select_surname(test_item_2), "The International HapMap Consortium")
+  expect_error(.select_surname(test_item_3))
+})
+
+test_that(".select_year works", {
+  test_item_1 <- list(item=list(issued="2025-03-10 20:21:47 UTC"))
+  test_item_2 <- list(item=list(title="This is the title"))
+  expect_equal(.select_year(test_item_1), 2025)
+  expect_error(.select_year(test_item_2))
+})
+
+test_that(".select_title works", {
+  test_item_1 <- list(item=list(title="This is the title"))
+  test_item_2 <- list(item=list(issued="2025-03-10 20:21:47 UTC"))
+  expect_equal(.select_title(test_item_1), "This is the title")
+  expect_error(.select_title(test_item_2))
+})
