@@ -383,14 +383,17 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
   private = list(
     pool = NULL,
     validators = VALIDATORS,
-    augmentors = AUGMENTORS
+    augmentors = AUGMENTORS,
+    insert_new_item = function(object_data) {
+      stop("not implemented")
+    }
   ),
   public = list(
     #' @description
     #' Create new ErudicionDB object
     #'
     #' @param dbargs_list A list of parameters to create the database
-    initialize = function(dbargs_list = DBARGS) {
+    initialize = function(dbargs_list) {
       # super$initialize()
       self$establish_connection(dbargs_list)
     },

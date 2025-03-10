@@ -39,7 +39,7 @@ Interface for an ErudicionDB.
 \subsection{Method \code{new()}}{
 Create new ErudicionDB object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new(dbargs_list = DBARGS)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new(dbargs_list)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
