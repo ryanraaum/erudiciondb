@@ -441,6 +441,64 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     #' @param augment_function A function
     add_augmentor = function(for_what, augment_function) {
       private$augmentors[[for_what]] <- augment_function
+    },
+    #' @description
+    #' Fully create, augment, and validate object for insertion into database.
+    #'
+    #' @param object_type Kind of object (singular of table name)
+    #' @param object List of object data
+    #' @param stage Activation stage (default: 0=Active)
+    new_object = function(object_type, object, stage=0) {
+      .new_object(self$con, object_type=object_type, object=object,
+                  augment_function = private$augmentors[[object_type]],
+                  validate_function = private$validators[[object_type]],
+                  stage=stage)
+    },
+    #' @description
+    #' Insert a properly created, augmented, and validated object into the db.
+    #'
+    #' @param object List with proper object for database.
+    insert_object = function(object) {
+      .insert_one(self$con, object)
+    },
+    #' @description
+    #' Properly create and insert an object into db in one call.
+    #'
+    #' @param object_type Kind of object (singular of table name)
+    #' @param object List of object data
+    #' @param stage Activation stage (default: 0=Active)
+    insert_new_object = function(object_type, object, stage=0) {
+      if (object_type == "item" && "item" %in% names(object_data)) {
+        new_object_id <- private$insert_new_item(object, stage=0)
+      } else {
+        new_object_id <- pool::poolWithTransaction(self$con, function(conn) {
+          .new_object(conn, object_type=object_type, object=object,
+                      augment_function = private$augmentors[[object_type]],
+                      validate_function = private$validators[[object_type]],
+                      stage=stage)
+          .insert_one(conn, object)
+        })
+      }
+      new_object_id
+    },
+    #' @description
+    #' Retrieve objects from the database.
+    #'
+    #' Note that submitting a vector of object_id's will return multiple
+    #' objects. Also note that the search can use a different column using
+    #' the `by` parameter, in which case the `object_id` parameter is the
+    #' search term(s) for that other column.
+    #'
+    #' @param object_type Kind of object (singular of table name)
+    #' @param object_id The object_id in the database
+    #' @param stage Activation stage (default: 0=Active)
+    #' @param revision Revision of the object (default: "max"=latest)
+    #' @param by Retrieve by some column other than object_id (default: NULL=no)
+    #' @param as_list Return as list (default: TRUE; FALSE = as data frame)
+    retrieve = function(object_type, object_id, stage=0, revision="max",
+                          by=NULL, as_list=TRUE) {
+      .retrieve(self$con, object_type=object_type, object_id=object_id,
+       stage=stage, revision=revision, by=by, as_list=as_list)
     }
   ),
   active = list(
