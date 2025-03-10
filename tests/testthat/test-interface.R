@@ -521,6 +521,32 @@ test_that("ErudicionDB object can insert and retrieve objects from database", {
   }
 })
 
+test_that("insert_new_item from repo2cp", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    test_item_1 <- list(
+      item = list(title="A title", issued="2025-03-10 20:21:47 UTC"),
+      author = list(
+        list(family="Griswold", given="Clark"),
+        list(family="Johnson", given="Eddie")
+      ),
+      author_affiliation = list(
+        c("Food Preservation Corp"),
+        c("Chemical Toilet Cleaners, Inc")
+      )
+    )
+
+    new_item_id <- expect_no_error(testdbobj$insert_new_object("item", test_item_1))
+    retrieved_items <- expect_no_condition(testdbobj$retrieve("item", new_item_id))
+    expect_equal(length(retrieved_items), 1)
+    retrieved_item <- retrieved_items[[1]]
+
+    expect_equal(retrieved_item$title, test_item_1$item$title)
+  }
+})
+
 
 test_that("testing stub", {
   for (db in supported_databases()) {

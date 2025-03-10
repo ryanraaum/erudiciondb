@@ -30,6 +30,7 @@ Interface for an ErudicionDB.
 \item \href{#method-erudicion_db_object-insert_object}{\code{ErudicionDB$insert_object()}}
 \item \href{#method-erudicion_db_object-insert_new_object}{\code{ErudicionDB$insert_new_object()}}
 \item \href{#method-erudicion_db_object-retrieve}{\code{ErudicionDB$retrieve()}}
+\item \href{#method-erudicion_db_object-match_person}{\code{ErudicionDB$match_person()}}
 \item \href{#method-erudicion_db_object-clone}{\code{ErudicionDB$clone()}}
 }
 }
@@ -37,6 +38,9 @@ Interface for an ErudicionDB.
 \if{html}{\out{<a id="method-erudicion_db_object-new"></a>}}
 \if{latex}{\out{\hypertarget{method-erudicion_db_object-new}{}}}
 \subsection{Method \code{new()}}{
+Insert a new item from an online repository
+
+
 Create new ErudicionDB object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$new(dbargs_list)}\if{html}{\out{</div>}}
@@ -46,6 +50,10 @@ Create new ErudicionDB object
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{dbargs_list}}{A list of parameters to create the database}
+
+\item{\code{item_data}}{A list with item and creator entries}
+
+\item{\code{stage}}{Activation stage}
 }
 \if{html}{\out{</div>}}
 }
@@ -236,6 +244,25 @@ search term(s) for that other column.
 \item{\code{by}}{Retrieve by some column other than object_id (default: NULL=no)}
 
 \item{\code{as_list}}{Return as list (default: TRUE; FALSE = as data frame)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-match_person"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-match_person}{}}}
+\subsection{Method \code{match_person()}}{
+Find a focal person from an item_person.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$match_person(person_data, ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{person_data}}{An item_person in list form}
+
+\item{\code{...}}{Additional arguments}
 }
 \if{html}{\out{</div>}}
 }

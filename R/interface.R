@@ -359,6 +359,14 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   found
 }
 
+.citekey_exists_in_db <- function(connection, citekey) {
+  count_query <- glue::glue_sql("SELECT citation_key FROM items WHERE citation_key = {citekey}", .con = connection)
+  count_result <- DBI::dbGetQuery(connection, count_query)
+  this_count <- nrow(count_result)
+  assertthat::assert_that(length(this_count) == 1, msg="Found something other than a single count value")
+  this_count > 0
+}
+
 
 # this is a nothing function that has no use other than to stop the
 # R package build check function complaining about unused dbplyr
@@ -384,8 +392,83 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     pool = NULL,
     validators = VALIDATORS,
     augmentors = AUGMENTORS,
-    insert_new_item = function(object_data) {
-      stop("not implemented")
+    #' @description
+    #' Insert a new item from an online repository
+    #'
+    #' @param item_data A list with item and creator entries
+    #' @param stage Activation stage
+    insert_new_item = function(item_data, stage) {
+      # before we start, create a citation_key
+      citekey_surname <- .select_surname(item_data)
+      citekey_year <- .select_year(item_data)
+      citekey_title <- .select_title(item_data)
+      potential_citekey <- .make_citekey(citekey_surname, citekey_year, citekey_title)
+      if (.citekey_exists_in_db(self$con, potential_citekey)) {
+        potential_citekey <- .make_citekey(citekey_surname, citekey_year, citekey_title, n=2)
+      }
+      if (.citekey_exists_in_db(self$con, potential_citekey)) {
+        potential_citekey_base <- .make_citekey(citekey_surname, citekey_year, citekey_title)
+        potential_citekey <- potential_citekey_base
+        i <- 0
+        while(.citekey_exists_in_db(self$con, potential_citekey)) {
+          i <- i + 1
+          potential_citekey <- paste0(potential_citekey_base, i)
+        }
+      }
+      item_data$item$citation_key <- potential_citekey
+
+      # first, insert the core item into the items table
+      this_item_id <- self$insert_new_object("item", item_data$item, stage=stage)
+
+      # second, find all the valid personlists in the item data
+      personlists <- base::intersect(valid_personlist_types, names(item_data))
+
+      # and then, for each personlist, add
+      # 1. the list
+      # 2. its people
+      # 3. (if present) their affiliations
+      for (plist in personlists) {
+        plist_id <- self$insert_new_object("personlist", list(item_id = this_item_id,
+                                                              personlist_type = plist),
+                                           stage=stage)
+        this_plist <- item_data[[plist]]
+        this_affiliation <- item_data[[glue::glue("{plist}_affiliation")]]
+        for (i in seq_along(this_plist)) {
+          this_person <- this_plist[[i]]
+          # look to see if this item person is in one of our focal people
+          found_person <- self$match_person(this_person)
+          found_person_issue <- NULL
+          if (.this_exists(found_person)) {
+            if (nrow(found_person) == 1) {
+              this_person$person_id = found_person$person_id
+            } else {
+              # more than one match, but don't have item_person_id yet, so just create an issue
+              #  that will be updated below after the person is entered into the database
+              this_person_issue <- list(object_type="item_person", status="open", description="multiple persons matched")
+            }
+          }
+          this_person$personlist_id <- plist_id
+          this_person$position <- i
+          # add to db
+          this_item_person_id <- self$insert_new_object("item_person", this_person)
+          # if an issue was found earlier, add it to the database
+          if (.this_exists(found_person_issue)) {
+            found_person_issue$object_id <- this_item_person_id
+            self$insert_new_object("issue", found_person_issue, stage=stage)
+          }
+          if (.this_exists(this_affiliation) && .this_exists(this_affiliation[[i]])) {
+            for (j in seq_along(this_affiliation[[i]])) {
+              this_affiliation_entry <- list(
+                item_person_id = this_item_person_id,
+                position = j,
+                affiliation = this_affiliation[[i]][j]
+              )
+              self$insert_new_object("affiliation_reference", this_affiliation_entry, stage=stage)
+            }
+          }
+        }
+      }
+      return(this_item_id)
     }
   ),
   public = list(
@@ -471,15 +554,15 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     #' @param object List of object data
     #' @param stage Activation stage (default: 0=Active)
     insert_new_object = function(object_type, object, stage=0) {
-      if (object_type == "item" && "item" %in% names(object_data)) {
-        new_object_id <- private$insert_new_item(object, stage=0)
+      if (object_type == "item" && "item" %in% names(object)) {
+        new_object_id <- private$insert_new_item(object, stage=stage)
       } else {
         new_object_id <- pool::poolWithTransaction(self$con, function(conn) {
-          .new_object(conn, object_type=object_type, object=object,
+          new_object <- .new_object(conn, object_type=object_type, object=object,
                       augment_function = private$augmentors[[object_type]],
                       validate_function = private$validators[[object_type]],
                       stage=stage)
-          .insert_one(conn, object)
+          .insert_one(conn, new_object)
         })
       }
       new_object_id
@@ -502,6 +585,14 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
                           by=NULL, as_list=TRUE) {
       .retrieve(self$con, object_type=object_type, object_id=object_id,
        stage=stage, revision=revision, by=by, as_list=as_list)
+    },
+    #' @description
+    #' Find a focal person from an item_person.
+    #'
+    #' @param person_data An item_person in list form
+    #' @param ... Additional arguments
+    match_person = function(person_data, ...) {
+      return(NULL)
     }
   ),
   active = list(
