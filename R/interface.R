@@ -367,6 +367,107 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   this_count > 0
 }
 
+# find "person" from imported item person data
+# - `pdata` is a list; relevant elements are `family`, `given`, `orcid`, and `literal`
+#    (entries with a `literal` value and no `family` or `given` are institutional authors;
+#       institutional authors will not be matched - persons table is only actual people)
+.match_person <- function(connection, pdata, only_most_recent = TRUE, only_active_stage = TRUE) {
+  # need to have at least a `family` or `given` name
+  pdata_names <- names(pdata)
+  if (!("given" %in% pdata_names || "family" %in% pdata_names)) { return(NULL) }
+
+
+  # pdata <- pdata |>
+  #   mutate(given_ascii = stringi::stri_trans_general(given, id = "Latin-ASCII"),
+  #          family_ascii = stringi::stri_trans_general(family, id = "Latin-ASCII"))
+
+  pdata$given_ascii = tolower(stringi::stri_trans_general(pdata$given, id = "Latin-ASCII"))
+  pdata$family_ascii = tolower(stringi::stri_trans_general(pdata$family, id = "Latin-ASCII"))
+
+  # Instead of sending a bunch of queries to the database,
+  #  just pull the full `persons` table here.
+  # This assumes that the `persons` table is small,
+  #  which is true for the core intended use cases
+  persons <- dplyr::tbl(connection, "persons") |>
+    dplyr::collect()
+
+  if (only_most_recent) {
+    persons <- persons |>
+      dplyr::group_by(person_id) |>
+      dplyr::arrange(dplyr::desc(revision)) |>
+      dplyr::slice(1) |>
+      dplyr::ungroup()
+  }
+
+  if (only_active_stage) {
+    persons <- persons |> dplyr::filter(stage == 0)
+  }
+
+  # first, try to find an orcid match
+  if ("orcid" %in% pdata_names) {
+    this_person <- persons |> dplyr::filter(orcid == pdata$orcid)
+    if (nrow(this_person) >= 1) {
+      return(
+        this_person |>
+          dplyr::mutate(similarity = 1, found_by = "orcid")
+      )
+    }
+  }
+
+  # second, look for a perfect first and last name match
+  if ("given" %in% pdata_names && "family" %in% pdata_names) {
+    this_person <- persons |> dplyr::filter(primary_given_names == pdata$given,
+                                     surnames == pdata$family)
+    if (nrow(this_person) == 0) {
+      this_person <- persons |> dplyr::filter(ascii_given_names == pdata$given_ascii,
+                                              ascii_surnames == pdata$family_ascii)
+    }
+    if (nrow(this_person) >= 1) {
+      return(
+        this_person |>
+          dplyr::mutate(similarity = 1, found_by = "full_name_match")
+      )
+    }
+  }
+
+  # add initials column
+  persons <- persons |>
+    dplyr::mutate(initials = .initials(ascii_given_names))
+
+  # third, look for a perfect initials and last name match
+  if ("given" %in% pdata_names && "family" %in% pdata_names) {
+    this_person <- persons |> dplyr::filter(tolower(initials) == tolower(.initials(pdata$given)), surnames == pdata$family)
+    if (nrow(this_person) == 0) {
+      this_person <- persons |> dplyr::filter(tolower(initials) == tolower(.initials(pdata$given)), ascii_surnames == pdata$family_ascii)
+    }
+    if (nrow(this_person) >= 1) {
+      return(
+        this_person |>
+          dplyr::mutate(similarity = 1, found_by = "initials_match")
+      )
+    }
+  }
+
+  # fourth, look for a close first and last name match
+  if ("given" %in% pdata_names && "family" %in% pdata_names) {
+    # use only first word in ascii given name (initials are not in the primary_given_names column)
+    first_given <- stringr::str_extract(pdata$given_ascii, "\\w+")
+    this_person <- persons |>
+      dplyr::mutate(given_distance = stringdist::stringdist(first_given, ascii_given_names, method="jw"),
+             family_distance = stringdist::stringdist(pdata$family_ascii, ascii_surnames, method="jw")) |>
+      dplyr::filter(given_distance < 0.05, family_distance < 0.05)
+    if (nrow(this_person) >= 1) {
+      return(
+        this_person |>
+          dplyr::mutate(similarity = 1-mean(c(given_distance, family_distance)), found_by = "approximate_name_match")
+      )
+    }
+  }
+
+  return(NULL)
+}
+
+
 
 # this is a nothing function that has no use other than to stop the
 # R package build check function complaining about unused dbplyr

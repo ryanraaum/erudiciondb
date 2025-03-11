@@ -547,6 +547,46 @@ test_that("insert_new_item from repo2cp", {
   }
 })
 
+test_that("match_person can match people", {
+  for (db in supported_databases()) {
+    # setting up
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    some_people <- list(
+      list(primary_given_names="Ryan", other_given_names="Lowell", surnames="Raaum"),
+      list(primary_given_names="William", other_given_names="E. H.", surnames="Harcourt-Smith"),
+      list(primary_given_names="J", surnames="Mohorčich"),
+      list(primary_given_names="Maryam", surnames="Bamshad-Alavi")
+    )
+    person_ids = vector("character", length(some_people))
+    for (i in seq_along(some_people)) {
+      person_ids[i] <- expect_no_error(testdbobj$insert_new_object("person", some_people[[i]]))
+    }
+
+    match_result <- expect_no_error(.match_person(testdbobj$con, list(given="Ryan", family="Raaum")))
+    expect_false(is.null(match_result))
+    expect_true(inherits(match_result, "data.frame"))
+    expect_true(person_ids[1] %in% match_result$person_id)
+
+    match_result <- expect_no_error(.match_person(testdbobj$con, list(given="William E H", family="Harcourt-Smith")))
+    expect_false(is.null(match_result))
+    expect_true(inherits(match_result, "data.frame"))
+    expect_true(person_ids[2] %in% match_result$person_id)
+
+    match_result <- expect_no_error(.match_person(testdbobj$con, list(given="Joseph", family="Mohorcich")))
+    expect_false(is.null(match_result))
+    expect_true(inherits(match_result, "data.frame"))
+    expect_true(person_ids[3] %in% match_result$person_id)
+
+    match_result <- expect_no_error(.match_person(testdbobj$con, list(given="Maryam", family="Bamshad")))
+    expect_false(is.null(match_result))
+    expect_true(inherits(match_result, "data.frame"))
+    expect_true(person_ids[4] %in% match_result$person_id)
+  }
+})
+
+
 
 test_that("testing stub", {
   for (db in supported_databases()) {

@@ -6,6 +6,10 @@
   !(all(is.na(x)) || all(is.null(x)) || length(x) == 0)
 }
 
+.this_or_empty_string <- function(x) {
+  ifelse(.this_exists(x), x, "")
+}
+
 # starting point derived from https://github.com/rijpma/capelinker (no LICENSE)
 # - among other changes, now
 #   - handles hyphenated names
@@ -26,6 +30,31 @@
   }
 
   sapply(out, stringi::stri_join, collapse = "")
+}
+
+.name_parts <- function(names) {
+  split_name <- stringr::str_split(names, pattern="\\W")[[1]]
+  split_name[nchar(split_name) > 0]
+}
+
+.shortest_distance(found_parts, target_parts) {
+  found_parts <- found_parts[nchar(found_parts) > 1]
+  target_parts <- target_parts[nchar(target_parts) > 1]
+  if (length(found_parts) == 0) { return(1) }
+  if (length(found_parts) == 1) {
+    return(min(stringdist::stringdist(found_parts, target_parts, method="jw")))
+  }
+  if (length(target_parts) >= length(found_parts)) {
+    minimum_dist <- 1
+    for (i in seq_along(target_parts)) {
+      # compare found parts to successive subsets of target parts
+    }
+  }
+}
+
+.name_distance <- function(found_name, target_names) {
+  found_name_parts <- .name_parts(found_name)
+  target_name_parts <- purrr::map(target_names, .name_parts)
 }
 
 .word_from_title <- function(title, n=1) {
