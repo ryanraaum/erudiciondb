@@ -372,6 +372,11 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 #    (entries with a `literal` value and no `family` or `given` are institutional authors;
 #       institutional authors will not be matched - persons table is only actual people)
 .match_person <- function(connection, pdata, only_most_recent = TRUE, only_active_stage = TRUE) {
+  # stop check warnings
+  person_id <- revision <- stage <- orcid <- primary_given_names <- NULL
+  surnames <- ascii_given_names <- ascii_surnames <- initials <- NULL
+  family_distance <- given_distance <- NULL
+
   # need to have at least a `family` or `given` name
   pdata_names <- names(pdata)
   if (!("given" %in% pdata_names || "family" %in% pdata_names)) { return(NULL) }
@@ -453,8 +458,8 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     # use only first word in ascii given name (initials are not in the primary_given_names column)
     first_given <- stringr::str_extract(pdata$given_ascii, "\\w+")
     this_person <- persons |>
-      dplyr::mutate(given_distance = stringdist::stringdist(first_given, ascii_given_names, method="jw"),
-             family_distance = stringdist::stringdist(pdata$family_ascii, ascii_surnames, method="jw")) |>
+      dplyr::mutate(given_distance = .name_distance(first_given, ascii_given_names),
+             family_distance = .name_distance(pdata$family_ascii, ascii_surnames)) |>
       dplyr::filter(given_distance < 0.05, family_distance < 0.05)
     if (nrow(this_person) >= 1) {
       return(

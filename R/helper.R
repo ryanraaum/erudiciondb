@@ -37,24 +37,51 @@
   split_name[nchar(split_name) > 0]
 }
 
-.shortest_distance(found_parts, target_parts) {
+.shortest_distance <- function(found_parts, target_parts) {
   found_parts <- found_parts[nchar(found_parts) > 1]
   target_parts <- target_parts[nchar(target_parts) > 1]
   if (length(found_parts) == 0) { return(1) }
+  if (length(target_parts) == 0) { return(1) }
   if (length(found_parts) == 1) {
     return(min(stringdist::stringdist(found_parts, target_parts, method="jw")))
   }
   if (length(target_parts) >= length(found_parts)) {
     minimum_dist <- 1
-    for (i in seq_along(target_parts)) {
+    for (i in 1:(length(target_parts) - length(found_parts) + 1)) {
       # compare found parts to successive subsets of target parts
+      current_distances <- vector("numeric", length(found_parts))
+      for (j in seq_along(found_parts)) {
+        current_distances[j] <- stringdist::stringdist(found_parts[j],
+                                                       target_parts[i+j-1],
+                                                       method="jw")
+      }
+      current_average <- mean(current_distances)
+      if (current_average < minimum_dist) { minimum_dist <- current_average }
     }
+    return(minimum_dist)
+  }
+  if (length(found_parts) > length(target_parts)) {
+    minimum_dist <- 1
+    for (i in 1:(length(found_parts) - length(target_parts) + 1)) {
+      # compare found parts to successive subsets of target parts
+      current_distances <- vector("numeric", length(target_parts))
+      for (j in seq_along(target_parts)) {
+        current_distances[j] <- stringdist::stringdist(target_parts[j],
+                                                       found_parts[i+j-1],
+                                                       method="jw")
+      }
+      current_average <- mean(current_distances)
+      if (current_average < minimum_dist) { minimum_dist <- current_average }
+    }
+    return(minimum_dist)
   }
 }
 
 .name_distance <- function(found_name, target_names) {
   found_name_parts <- .name_parts(found_name)
   target_name_parts <- purrr::map(target_names, .name_parts)
+  name_distances <- purrr::map(target_name_parts, \(x) .shortest_distance(found_name_parts, x))
+  unlist(name_distances)
 }
 
 .word_from_title <- function(title, n=1) {
