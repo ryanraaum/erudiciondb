@@ -254,15 +254,13 @@ search term(s) for that other column.
 \subsection{Method \code{match_person()}}{
 Find a focal person from an item_person.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$match_person(person_data, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$match_person(person_data)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{person_data}}{An item_person in list form}
-
-\item{\code{...}}{Additional arguments}
 }
 \if{html}{\out{</div>}}
 }

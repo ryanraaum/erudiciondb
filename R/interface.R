@@ -469,7 +469,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     }
   }
 
-  return(NULL)
+  return(EMPTY_FIND_RESULT)
 }
 
 
@@ -696,9 +696,9 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     #' Find a focal person from an item_person.
     #'
     #' @param person_data An item_person in list form
-    #' @param ... Additional arguments
-    match_person = function(person_data, ...) {
-      return(NULL)
+    match_person = function(person_data) {
+      return(.match_person(self$con, person_data,
+                           only_most_recent = TRUE, only_active_stage = TRUE))
     }
   ),
   active = list(
