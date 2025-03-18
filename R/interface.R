@@ -174,7 +174,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   where_clauses <- c()
   for (id in names(identifiers)) {
     if (.this_exists(identifiers[[id]])) {
-      if (isa(connection, "SQLiteConnection")) {
+      if (is_sqlite_connection(connection)) {
         where_clauses <- c(where_clauses, glue::glue_sql("{`id`} LIKE {identifiers[[id]]}", .con = connection))
       } else {
         where_clauses <- c(where_clauses, glue::glue_sql("{`id`} ILIKE {identifiers[[id]]}", .con = connection))
@@ -184,13 +184,11 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if (length(where_clauses) > 0) {
     combined_subclauses <- paste(where_clauses, collapse = " OR ")
     search_query <- glue::glue("SELECT item_id, stage, revision FROM items WHERE {combined_subclauses}")
-    query_results <- DBI::dbSendQuery(connection, search_query)
-    fetched_results <- DBI::dbFetch(query_results)
+    fetched_results <- DBI::dbGetQuery(connection, search_query)
     if (nrow(fetched_results) > 0) {
       result_df <- fetched_results |>
         dplyr::mutate(similarity = 1, found_by = "identifier")
     }
-    DBI::dbClearResult(query_results)
   }
   result_df
 }
@@ -198,7 +196,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .find_item_by_year_volume_page <- function(connection, year, volume, first_page) {
   result_df <- EMPTY_FIND_RESULT
   if (.this_exists(year) && .this_exists(volume) && .this_exists(first_page)) {
-    if (isa(connection, "SQLiteConnection")) {
+    if (is_sqlite_connection(connection)) {
       search_query <- glue::glue_sql("
         SELECT item_id, stage, revision FROM items
         WHERE strftime('%Y', issued) = {as.character(year)} AND volume LIKE {as.character(volume)} AND page_first LIKE {as.character(first_page)}",
@@ -212,13 +210,11 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       )
 
     }
-    query_results <- DBI::dbSendQuery(connection, search_query)
-    fetched_results <- DBI::dbFetch(query_results)
+    fetched_results <- DBI::dbGetQuery(connection, search_query)
     if (nrow(fetched_results) > 0) {
       result_df <- fetched_results |>
         dplyr::mutate(similarity = 1, found_by = "year_volume_page")
     }
-    DBI::dbClearResult(query_results)
   }
   result_df
 }
@@ -228,7 +224,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
   if (.this_exists(title)) {
     search_title_nchar <- nchar(title)
-    if (isa(connection, "SQLiteConnection")) {
+    if (is_sqlite_connection(connection)) {
       search_title = title
 
       # hack to stop package check from complaining
@@ -244,9 +240,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     SELECT
       item_id, stage, revision, jaro_winkler_similarity(lower({title}), substring(lower(title),1,{search_title_nchar})) as similarity
     FROM items WHERE similarity >= 0.9", .con = connection)
-      query_results <- DBI::dbSendQuery(connection, search_query)
-      fetched_results <- DBI::dbFetch(query_results)
-      DBI::dbClearResult(query_results)
+      fetched_results <- DBI::dbGetQuery(connection, search_query)
     }
     if (nrow(fetched_results) > 0) {
       result_df <- fetched_results |>
@@ -691,6 +685,18 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
                           by=NULL, as_list=TRUE) {
       .retrieve(self$con, object_type=object_type, object_id=object_id,
        stage=stage, revision=revision, by=by, as_list=as_list)
+    },
+    #' @description
+    #' Find an object in the database.
+    #'
+    #' @param object_type Kind of object (singular of table name)
+    #' @param object_data An object in list form
+    #' @param stage Activation stage (default: 0=Active)
+    #' @param revision Revision of the object (default: "max"=latest)
+    find = function(object_type, object_data,
+                    stage = 0, revision = "max") {
+      return(.find(self$con, object_type=object_type, object_data=object_data,
+                   stage = 0, revision = "max"))
     },
     #' @description
     #' Find a focal person from an item_person.

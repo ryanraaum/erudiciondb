@@ -30,6 +30,7 @@ Interface for an ErudicionDB.
 \item \href{#method-erudicion_db_object-insert_object}{\code{ErudicionDB$insert_object()}}
 \item \href{#method-erudicion_db_object-insert_new_object}{\code{ErudicionDB$insert_new_object()}}
 \item \href{#method-erudicion_db_object-retrieve}{\code{ErudicionDB$retrieve()}}
+\item \href{#method-erudicion_db_object-find}{\code{ErudicionDB$find()}}
 \item \href{#method-erudicion_db_object-match_person}{\code{ErudicionDB$match_person()}}
 \item \href{#method-erudicion_db_object-clone}{\code{ErudicionDB$clone()}}
 }
@@ -244,6 +245,29 @@ search term(s) for that other column.
 \item{\code{by}}{Retrieve by some column other than object_id (default: NULL=no)}
 
 \item{\code{as_list}}{Return as list (default: TRUE; FALSE = as data frame)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-erudicion_db_object-find"></a>}}
+\if{latex}{\out{\hypertarget{method-erudicion_db_object-find}{}}}
+\subsection{Method \code{find()}}{
+Find an object in the database.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$find(object_type, object_data, stage = 0, revision = "max")}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{object_type}}{Kind of object (singular of table name)}
+
+\item{\code{object_data}}{An object in list form}
+
+\item{\code{stage}}{Activation stage (default: 0=Active)}
+
+\item{\code{revision}}{Revision of the object (default: "max"=latest)}
 }
 \if{html}{\out{</div>}}
 }

@@ -225,3 +225,10 @@ supported_databases <- function(just_this_one=NULL) {
   if (is.null(just_this_one)) {return(c("duckdb", "sqlite"))}
   return(just_this_one)
 }
+
+is_sqlite_connection <- function(conn) {
+  if (inherits(conn, "Pool")) {
+    return("SQLiteConnection" %in% conn$objClass)
+  }
+  return(isa(conn, "SQLiteConnection"))
+}

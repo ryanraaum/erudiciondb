@@ -191,6 +191,9 @@ test_that("item can be found by identifiers that are part of citeproc schema", {
                                                               doi=this_id,
                                                               pmid=this_id,
                                                               pmcid=this_id))
+      expect_true(nrow(found_1) == 1)
+      expect_true(found_1$item_id == new_item_id)
+
       found_2 <- expect_no_condition(.find(testcon, "item", list(doi=this_id,
                                                                  pmid=this_id,
                                                                  pmcid=this_id)))
@@ -305,6 +308,50 @@ test_that("item can be found by person", {
     found_2 <- expect_no_condition(.find(testcon, "item", list(title="genbank")))
     expect_true(nrow(found_2) == 1)
     expect_true(found_2$item_id == new_item_id)
+  }
+})
+
+test_that("item can be found through object interface", {
+  for (db in supported_databases()) {
+    testdbobj <- expect_no_error(make_testdbobj(db))
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    proto_new_item <- list(title="GenBank",
+                           container_title="Nucleic Acids Research",
+                           container_title_short="Nucleic Acids Res",
+                           volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"),
+                           doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903"
+    )
+    new_item <- expect_no_condition(testdbobj$new_object("item", proto_new_item))
+    new_item_id <- expect_no_condition(testdbobj$insert_object(new_item))
+
+    proto_personlist <- list(item_id=new_item_id,
+                             personlist_type="author")
+    new_personlist <- expect_no_condition(testdbobj$new_object("personlist", proto_personlist))
+    new_personlist_id <- expect_no_condition(testdbobj$insert_object(new_personlist))
+
+    proto_person <- list(surnames="Clark",
+                         primary_given_names="Karen")
+    new_person <- expect_no_condition(testdbobj$new_object("person", proto_person))
+    new_person_id <- expect_no_error(testdbobj$insert_object(new_person))
+
+    proto_item_person <- list(personlist_id=new_personlist_id,
+                              person_id=new_person_id,
+                              family="Clark",
+                              given="Karen")
+    new_item_person <- expect_no_condition(testdbobj$new_object("item_person", proto_item_person))
+    new_item_person_id <- expect_no_condition(testdbobj$insert_object(new_item_person))
+
+    found_1 <- expect_no_condition(testdbobj$find("item", new_item))
+    expect_true(nrow(found_1) == 1)
+    expect_true(found_1$item_id == new_item_id)
+
   }
 })
 
