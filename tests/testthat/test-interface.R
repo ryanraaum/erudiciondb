@@ -355,6 +355,36 @@ test_that("item can be found through object interface", {
   }
 })
 
+test_that("item that does not exits is not found through object interface", {
+  for (db in supported_databases()) {
+    testdbobj <- expect_no_error(make_testdbobj(db))
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    item_w_identifiers <- list(doi="10.1093/nar/gkv1276",
+                           pmid="26590407",
+                           pmcid="PMC4702903")
+
+    found_1 <- expect_no_condition(testdbobj$find("item", item_w_identifiers))
+    expect_true(nrow(found_1) == 0)
+
+    item_w_year_volume_page <- list(volume=44,
+                           issue="D1",
+                           page_first="D67",
+                           page="D67-D72",
+                           issued=as.Date("20151120", "%Y%m%d"))
+
+    found_2 <- expect_no_condition(testdbobj$find("item", item_w_year_volume_page))
+    expect_true(nrow(found_2) == 0)
+
+    item_w_title <- list(title="GenBank")
+
+    found_3 <- expect_no_condition(testdbobj$find("item", item_w_title))
+    expect_true(nrow(found_3) == 0)
+
+  }
+})
+
+
 test_that("person_identifier can be found", {
   for (db in supported_databases()) {
     testcon <- make_testcon(db)
