@@ -92,12 +92,21 @@
 }
 
 .make_citekey <- function(surname, year, title, n=1) {
-  surname <- stringi::stri_trans_general(surname, id = "Latin-ASCII")
-  surname <- strsplit(surname, "\\W+")[[1]]
-  surname <- paste(surname, collapse="")
-  title <- stringi::stri_trans_general(title, id = "Latin-ASCII")
-  title <- .word_from_title(title, n=n)
-  title <- paste(title, collapse="")
+  if (!is.na(surname)) {
+    surname <- stringi::stri_trans_general(surname, id = "Latin-ASCII")
+    surname <- strsplit(surname, "\\W+")[[1]]
+    surname <- paste(surname, collapse="")
+  } else {
+    surname <- ""
+  }
+  if (!is.na(title)) {
+    title <- stringi::stri_trans_general(title, id = "Latin-ASCII")
+    title <- .word_from_title(title, n=n)
+    title <- paste(title, collapse="")
+  } else {
+    title <- ""
+  }
+  if (is.na(year)) { year <- "" }
   paste0(surname, year, title)
 }
 
@@ -141,7 +150,7 @@ valid_personlist_types <- c(
   first_person <- item_data[[preferred]][[1]]
   if (.this_exists(first_person$family)) { return(first_person$family) }
   if (.this_exists(first_person$literal)) { return(first_person$literal) }
-  stop("cannot find name for citation key")
+  return(NA)
 }
 
 # `item_data` is the object created by the `repo2cp` parsers
@@ -149,7 +158,7 @@ valid_personlist_types <- c(
 #   throw an identifiable error for items that might not have an `issued` date
 .select_year <- function(item_data) {
   if (.this_exists(item_data$item$issued)) { return(lubridate::year(item_data$item$issued))}
-  stop("cannot find year for citation key")
+  return(NA)
 }
 
 # `item_data` is the object created by the `repo2cp` parsers
@@ -158,7 +167,7 @@ valid_personlist_types <- c(
 #   (if that is possible?)
 .select_title <- function(item_data) {
   if (.this_exists(item_data$item$title)) { return(item_data$item$title)}
-  stop("cannot find title for citation key")
+  return(NA)
 }
 
 .update_it <- function(this_object, this_variable, this_value) {
