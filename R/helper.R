@@ -1,15 +1,6 @@
 
 ## data helpers
 
-# not vectorized; always returns a single value
-.this_exists <- function(x) {
-  !(all(is.na(x)) || all(is.null(x)) || length(x) == 0)
-}
-
-.this_or_empty_string <- function(x) {
-  ifelse(.this_exists(x), x, "")
-}
-
 # starting point derived from https://github.com/rijpma/capelinker (no LICENSE)
 # - among other changes, now
 #   - handles hyphenated names
@@ -139,8 +130,8 @@ valid_personlist_types <- c(
   which_preferred <- which(plists_order == min(plists_order))
   preferred <- personlists[which_preferred]
   first_person <- item_data[[preferred]][[1]]
-  if (.this_exists(first_person$family)) { return(first_person$family) }
-  if (.this_exists(first_person$literal)) { return(first_person$literal) }
+  if (aidr::this_exists(first_person$family)) { return(first_person$family) }
+  if (aidr::this_exists(first_person$literal)) { return(first_person$literal) }
   stop("cannot find name for citation key")
 }
 
@@ -148,7 +139,7 @@ valid_personlist_types <- c(
 # this doesn't really require a separate function, but it is here to
 #   throw an identifiable error for items that might not have an `issued` date
 .select_year <- function(item_data) {
-  if (.this_exists(item_data$item$issued)) { return(lubridate::year(item_data$item$issued))}
+  if (aidr::this_exists(item_data$item$issued)) { return(lubridate::year(item_data$item$issued))}
   stop("cannot find year for citation key")
 }
 
@@ -157,7 +148,7 @@ valid_personlist_types <- c(
 #   throw an identifiable error for items that might not have a `title`
 #   (if that is possible?)
 .select_title <- function(item_data) {
-  if (.this_exists(item_data$item$title)) { return(item_data$item$title)}
+  if (aidr::this_exists(item_data$item$title)) { return(item_data$item$title)}
   stop("cannot find title for citation key")
 }
 
