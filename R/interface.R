@@ -108,6 +108,17 @@
   object[[object_id]]
 }
 
+.insert_new_object <- function(connection, object_type, object,
+                               validate_function=NULL,
+                               augment_function=NULL,
+                               stage=0) {
+  new_object <- .new_object(connection, object_type=object_type, object=object,
+                            validate_function = validate_function,
+                            augment_function = augment_function,
+                            stage=stage)
+  .insert_one(connection, new_object)
+}
+
 # object exists in the database
 .destage_one <- function(connection, object) {
   object_type <- object$object_type
@@ -517,57 +528,75 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
       }
       item_data$item$citation_key <- potential_citekey
 
-      # first, insert the core item into the items table
-      this_item_id <- self$insert_new_object("item", item_data$item, stage=stage)
-
-      # second, find all the valid personlists in the item data
-      personlists <- base::intersect(valid_personlist_types, names(item_data))
-
-      # and then, for each personlist, add
-      # 1. the list
-      # 2. its people
-      # 3. (if present) their affiliations
-      for (plist in personlists) {
-        plist_id <- self$insert_new_object("personlist", list(item_id = this_item_id,
-                                                              personlist_type = plist),
+      this_item_id <- pool::poolWithTransaction(private$pool, function(conn) {
+        # first, insert the core item into the items table
+        this_item_id <- .insert_new_object(conn, "item", item_data$item,
+                                           validate_function = private$validators[["item"]],
+                                           augment_function = private$augmentors[["item"]],
                                            stage=stage)
-        this_plist <- item_data[[plist]]
-        this_affiliation <- item_data[[glue::glue("{plist}_affiliation")]]
-        for (i in seq_along(this_plist)) {
-          this_person <- this_plist[[i]]
-          # look to see if this item person is in one of our focal people
-          found_person <- self$match_person(this_person)
-          found_person_issue <- NULL
-          if (.this_exists(found_person)) {
-            if (nrow(found_person) == 1) {
-              this_person$person_id = found_person$person_id
-            } else {
-              # more than one match, but don't have item_person_id yet, so just create an issue
-              #  that will be updated below after the person is entered into the database
-              this_person_issue <- list(object_type="item_person", status="open", description="multiple persons matched")
+
+        # second, find all the valid personlists in the item data
+        personlists <- base::intersect(valid_personlist_types, names(item_data))
+
+        # and then, for each personlist, add
+        # 1. the list
+        # 2. its people
+        # 3. (if present) their affiliations
+        for (plist in personlists) {
+          plist_id <- .insert_new_object(conn, "personlist", list(item_id = this_item_id,
+                                                                personlist_type = plist),
+                                         validate_function = private$validators[["personlist"]],
+                                         augment_function = private$augmentors[["personlist"]],
+                                         stage=stage)
+
+          this_plist <- item_data[[plist]]
+          this_affiliation <- item_data[[glue::glue("{plist}_affiliation")]]
+          for (i in seq_along(this_plist)) {
+            this_person <- this_plist[[i]]
+            # look to see if this item person is in one of our focal people
+            found_person <- .match_person(conn, this_person)
+            found_person_issue <- NULL
+            if (.this_exists(found_person)) {
+              if (nrow(found_person) == 1) {
+                this_person$person_id = found_person$person_id
+              } else {
+                # more than one match, but don't have item_person_id yet, so just create an issue
+                #  that will be updated below after the person is entered into the database
+                this_person_issue <- list(object_type="item_person", status="open", description="multiple persons matched")
+              }
             }
-          }
-          this_person$personlist_id <- plist_id
-          this_person$position <- i
-          # add to db
-          this_item_person_id <- self$insert_new_object("item_person", this_person)
-          # if an issue was found earlier, add it to the database
-          if (.this_exists(found_person_issue)) {
-            found_person_issue$object_id <- this_item_person_id
-            self$insert_new_object("issue", found_person_issue, stage=stage)
-          }
-          if (.this_exists(this_affiliation) && .this_exists(this_affiliation[[i]])) {
-            for (j in seq_along(this_affiliation[[i]])) {
-              this_affiliation_entry <- list(
-                item_person_id = this_item_person_id,
-                position = j,
-                affiliation = this_affiliation[[i]][j]
-              )
-              self$insert_new_object("affiliation_reference", this_affiliation_entry, stage=stage)
+            this_person$personlist_id <- plist_id
+            this_person$position <- i
+            # add to db
+            this_item_person_id <- .insert_new_object(conn, "item_person", this_person,
+                                                      validate_function = private$validators[["item_person"]],
+                                                      augment_function = private$augmentors[["item_person"]])
+
+            # if an issue was found earlier, add it to the database
+            if (.this_exists(found_person_issue)) {
+              found_person_issue$object_id <- this_item_person_id
+              .insert_new_object(conn, "issue", found_person_issue,
+                                 validate_function = private$validators[["issue"]],
+                                 augment_function = private$augmentors[["issue"]],
+                                 stage=stage)
+            }
+            if (.this_exists(this_affiliation) && .this_exists(this_affiliation[[i]])) {
+              for (j in seq_along(this_affiliation[[i]])) {
+                this_affiliation_entry <- list(
+                  item_person_id = this_item_person_id,
+                  position = j,
+                  affiliation = this_affiliation[[i]][j]
+                )
+                .insert_new_object(conn, "affiliation_reference", this_affiliation_entry,
+                                   validate_function = private$validators[["affiliation_reference"]],
+                                   augment_function = private$augmentors[["affiliation_reference"]],
+                                   stage=stage)
+              }
             }
           }
         }
-      }
+        return(this_item_id)
+      })
       return(this_item_id)
     }
   ),

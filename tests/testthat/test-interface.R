@@ -674,6 +674,17 @@ test_that("match_person can match people", {
   }
 })
 
+test_that("match_person works with empty table", {
+  for (db in supported_databases()) {
+    # setting up
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    match_result <- expect_no_error(.match_person(testdbobj$con, list(given="Ryan", family="Raaum")))
+    expect_false(is.null(match_result))
+    expect_true(nrow(match_result) == 0)
+  }
+})
 
 
 test_that("testing stub", {
