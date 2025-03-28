@@ -489,6 +489,92 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 
+.biblio <- function(connection, item_id, format="json") {
+  items <- .find(connection, "item", list(item_id=item_id))
+  items <- apply(items, 1, as.list)
+  if (length(items) == 0) { return(list()) }
+  names(items) <- sapply(items, '[[', "item_id")
+  items <- items |>
+    .filter_na() |>
+    .filter_internal() |>
+    purrr::map(\(x) .rename_element(x, "citation_key", "id")) |>
+    purrr::map(\(x) .rename_element(x, "container_title_short", "container-title-short")) |>
+    purrr::map(\(x) .rename_element(x, "container_title", "container-title")) |>
+    purrr::map(\(x) .rename_element(x, "available_date", "available-date")) |>
+    purrr::map(\(x) .rename_element(x, "event_date", "event-date")) |>
+    purrr::map(\(x) .rename_element(x, "event_title", "event-title")) |>
+    purrr::map(\(x) .rename_element(x, "event_place", "event-place")) |>
+    purrr::map(\(x) .rename_element(x, "original_date", "original-date")) |>
+    purrr::map(\(x) .rename_element(x, "archive_place", "archive-place")) |>
+    purrr::map(\(x) .rename_element(x, "call_number", "call-number")) |>
+    purrr::map(\(x) .rename_element(x, "chapter_number", "chapter-number")) |>
+    purrr::map(\(x) .rename_element(x, "citation_number", "citation-number")) |>
+    purrr::map(\(x) .rename_element(x, "citation_label", "citation-label")) |>
+    purrr::map(\(x) .rename_element(x, "collection_number", "collection-number")) |>
+    purrr::map(\(x) .rename_element(x, "collection_title", "collection-title")) |>
+    purrr::map(\(x) .rename_element(x, "first_reference_note_number", "first-reference-note-number")) |>
+    purrr::map(\(x) .rename_element(x, "number_of_pages", "number-of-pages")) |>
+    purrr::map(\(x) .rename_element(x, "number_of_volumes", "number-of-volumes")) |>
+    purrr::map(\(x) .rename_element(x, "original_publisher_place", "original-publisher-place")) |>
+    purrr::map(\(x) .rename_element(x, "original_publisher", "original-publisher")) |>
+    purrr::map(\(x) .rename_element(x, "original_title", "original-title")) |>
+    purrr::map(\(x) .rename_element(x, "page_first", "page-first")) |>
+    purrr::map(\(x) .rename_element(x, "part_title", "part-title")) |>
+    purrr::map(\(x) .rename_element(x, "publisher_place", "publisher-place")) |>
+    purrr::map(\(x) .rename_element(x, "reviewed_genre", "reviewed-genre")) |>
+    purrr::map(\(x) .rename_element(x, "reviewed_title", "reviewed-title")) |>
+    purrr::map(\(x) .rename_element(x, "title_short", "title-short")) |>
+    purrr::map(\(x) .rename_element(x, "year_suffix", "year-suffix"))
+
+
+  plists <- .biblio_personlist(connection, item_id)
+
+  for (this_id in item_id) {
+    items[[this_id]] <- c(items[[this_id]], plists[[this_id]])
+  }
+
+  if (format == "json") {
+    names(items) <- NULL
+    items.json <- jsonlite::toJSON(items, pretty=TRUE, auto_unbox=TRUE)
+    return(items.json)
+  }
+
+  items
+}
+
+
+# do many at once
+.biblio_personlist <- function(connection, item_id) {
+  plists <- .retrieve(connection, "personlist", item_id, by="item_id", as_list=FALSE)
+  if (nrow(plists) == 0) { return(list()) }
+
+  persons <- .retrieve(connection, "item_person", plists$personlist_id, by="personlist_id", as_list=FALSE) |>
+    dplyr::rename( "dropping-particle" = "dropping_particle",
+                   "non-dropping-particle" = "non_dropping_particle",
+                   "comma-suffix" = "comma_suffix",
+                   "static-ordering" = "static_ordering",
+                   "parse-names" = "parse_names")
+  indexed_list <- split(persons, persons$personlist_id)  |>
+    purrr::map(\(x) dplyr::arrange(x, position)) |>
+    purrr::map(\(x) apply(x, 1, as.list)) |>
+    purrr::map(.filter_na) |>
+    purrr::map(.filter_internal)
+
+  item_personlists <- list()
+  for (this_item in unique(plists$item_id)) {
+    this_subset <- plists |> dplyr::filter(item_id == this_item)
+    this_plists <- this_subset$personlist_id
+    this_type <- this_subset$personlist_type
+    this_item_plist <- list()
+    for (i in seq_len(nrow(this_subset))) {
+      this_item_plist[[this_type[i]]] <- indexed_list[[this_plists[[i]]]]
+    }
+    item_personlists[[this_item]] <- this_item_plist
+  }
+
+  item_personlists
+}
+
 
 # this is a nothing function that has no use other than to stop the
 # R package build check function complaining about unused dbplyr

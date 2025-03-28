@@ -177,7 +177,23 @@ valid_personlist_types <- c(
   this_value
 }
 
+.filter_na <- function(l) {
+  lapply(l, function(x) x[!is.na(x)])
+}
 
+.is_internal <- function(l) {
+  stringr::str_detect(names(l), "_id$") | names(l) %in% c("position", "object_type", "created", "stage", "revision")
+}
+
+.filter_internal <- function(l) {
+  lapply(l, function(x) x[!.is_internal(x)])
+}
+
+.rename_element <- function(l, from_name, to_name) {
+  targets <- which(stringr::str_detect(names(l), from_name))
+  names(l)[targets] <- to_name
+  l
+}
 
 ## test helpers
 
