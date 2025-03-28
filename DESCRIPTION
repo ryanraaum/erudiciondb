@@ -23,6 +23,7 @@ Imports:
     dplyr,
     duckdb,
     glue,
+    jsonlite,
     lubridate,
     pool,
     purrr,
