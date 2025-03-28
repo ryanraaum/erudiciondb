@@ -545,6 +545,9 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
 # do many at once
 .biblio_personlist <- function(connection, item_id) {
+  # just to silence check that doesn't understand piped tidy variables
+  position <- NULL
+
   plists <- .retrieve(connection, "personlist", item_id, by="item_id", as_list=FALSE)
   if (nrow(plists) == 0) { return(list()) }
 
