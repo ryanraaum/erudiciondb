@@ -187,14 +187,14 @@ test_that("item can be found by identifiers that are part of citeproc schema", {
 
     for (id in c("doi", "pmid", "pmcid")) {
       this_id <- proto_new_item[[id]]
-      found_1 <- expect_no_condition(.find_item_by_identifier(testcon,
+      found_1 <- expect_no_error(.find_item_by_identifier(testcon,
                                                               doi=this_id,
                                                               pmid=this_id,
                                                               pmcid=this_id))
       expect_true(nrow(found_1) == 1)
       expect_true(found_1$item_id == new_item_id)
 
-      found_2 <- expect_no_condition(.find(testcon, "item", list(doi=this_id,
+      found_2 <- expect_no_error(.find(testcon, "item", list(doi=this_id,
                                                                  pmid=this_id,
                                                                  pmcid=this_id)))
       expect_true(nrow(found_2) == 1)
@@ -364,7 +364,7 @@ test_that("item that does not exist is not found through object interface", {
                            pmid="26590407",
                            pmcid="PMC4702903")
 
-    found_1 <- expect_no_condition(testdbobj$find("item", item_w_identifiers))
+    found_1 <- expect_no_error(testdbobj$find("item", item_w_identifiers))
     expect_true(nrow(found_1) == 0)
 
     item_w_year_volume_page <- list(volume=44,
@@ -373,12 +373,12 @@ test_that("item that does not exist is not found through object interface", {
                            page="D67-D72",
                            issued=as.Date("20151120", "%Y%m%d"))
 
-    found_2 <- expect_no_condition(testdbobj$find("item", item_w_year_volume_page))
+    found_2 <- expect_no_error(testdbobj$find("item", item_w_year_volume_page))
     expect_true(nrow(found_2) == 0)
 
     item_w_title <- list(title="GenBank")
 
-    found_3 <- expect_no_condition(testdbobj$find("item", item_w_title))
+    found_3 <- expect_no_error(testdbobj$find("item", item_w_title))
     expect_true(nrow(found_3) == 0)
 
   }

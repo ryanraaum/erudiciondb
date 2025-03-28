@@ -355,7 +355,9 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     }
   } else if (object_type == "person_identifier") {
     found <- .find_person_identifier(connection, object_data)
-  } else {
+  }
+
+  if (nrow(found) == 0) {
     con <- pool::poolCheckout(connection)
 
     search_table <- dplyr::tbl(con, glue::glue("{object_type}s"))
