@@ -355,6 +355,15 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     }
   } else if (object_type == "person_identifier") {
     found <- .find_person_identifier(connection, object_data)
+  } else {
+    con <- pool::poolCheckout(connection)
+
+    search_table <- dplyr::tbl(con, glue::glue("{object_type}s"))
+    found <- search_table |>
+      dplyr::inner_join(tibble::as_tibble(object_data), copy=TRUE) |>
+      dplyr::collect()
+
+    pool::poolReturn(con)
   }
 
   found <- found |>
@@ -725,7 +734,7 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
     find = function(object_type, object_data,
                     stage = 0, revision = "max") {
       return(.find(self$con, object_type=object_type, object_data=object_data,
-                   stage = 0, revision = "max"))
+                   stage = stage, revision = revision))
     },
     #' @description
     #' Find a focal person from an item_person.

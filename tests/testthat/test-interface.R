@@ -355,7 +355,7 @@ test_that("item can be found through object interface", {
   }
 })
 
-test_that("item that does not exits is not found through object interface", {
+test_that("item that does not exist is not found through object interface", {
   for (db in supported_databases()) {
     testdbobj <- expect_no_error(make_testdbobj(db))
     expect_no_error(edb_create_tables(testdbobj$con))
@@ -420,6 +420,21 @@ test_that("person_identifier can be found", {
     found_by_person_id_2 <- expect_no_condition(.find(testcon, "person_identifier", list(person_id=proto_person_identifier$person_id)))
     expect_true(nrow(found_by_person_id_2) == 1)
     expect_true(found_by_person_id_2$person_identifier_id == new_person_identifier_id)
+
+  }
+})
+
+test_that("find will return any direct match", {
+  for (db in supported_databases()) {
+    testdbobj <- expect_no_error(make_testdbobj(db))
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    a_person <- list(primary_given_names = "Georg", surnames = "von Trapp")
+
+    person_id <- expect_no_error(testdbobj$insert_new_object("person", a_person))
+
+    found_1 <- expect_no_error(testdbobj$find("person", a_person))
+    expect_equal(person_id, found_1$person_id)
 
   }
 })
