@@ -51,11 +51,11 @@
 
 .revise_object <- function(connection, this_object, ...) {
   object_type <- this_object$object_type
-  if (!.this_exists(object_type)) {
+  if (!aidr::this_exists(object_type)) {
     stop("No `object_type` to be found - is this object properly formed?")
   }
   object_id_name <- glue::glue("{object_type}_id")
-  if (!.this_exists(this_object[[object_id_name]])) {
+  if (!aidr::this_exists(this_object[[object_id_name]])) {
     msg <- glue::glue("No `{object_id_name}` - does this object exist in the database?")
     stop(msg)
   }
@@ -184,7 +184,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   identifiers <- list(doi=doi, pmid=pmid, pmcid=pmcid)
   where_clauses <- c()
   for (id in names(identifiers)) {
-    if (.this_exists(identifiers[[id]])) {
+    if (aidr::this_exists(identifiers[[id]])) {
       if (is_sqlite_connection(connection)) {
         where_clauses <- c(where_clauses, glue::glue_sql("{`id`} LIKE {identifiers[[id]]}", .con = connection))
       } else {
@@ -206,7 +206,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
 .find_item_by_year_volume_page <- function(connection, year, volume, first_page) {
   result_df <- EMPTY_FIND_RESULT
-  if (.this_exists(year) && .this_exists(volume) && .this_exists(first_page)) {
+  if (aidr::this_exists(year) && aidr::this_exists(volume) && aidr::this_exists(first_page)) {
     if (is_sqlite_connection(connection)) {
       search_query <- glue::glue_sql("
         SELECT item_id, stage, revision FROM items
@@ -233,7 +233,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .find_item_by_title <- function(connection, title) {
   result_df <- fetched_results <- EMPTY_FIND_RESULT
 
-  if (.this_exists(title)) {
+  if (aidr::this_exists(title)) {
     search_title_nchar <- nchar(title)
     if (is_sqlite_connection(connection)) {
       search_title = title
@@ -266,7 +266,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   this_person_id <- person_id
   item_id <- NULL # hack to silence `check()`
 
-  if (.this_exists(person_id)) {
+  if (aidr::this_exists(person_id)) {
     items_tbl <- dplyr::tbl(connection, "items")
     personlists_tbl <- dplyr::tbl(connection, "personlists")
     item_persons_tbl <- dplyr::tbl(connection, "item_persons")
@@ -290,7 +290,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .find_person_identifier <- function(connection, object_data) {
   found <- tibble::tibble()
   id_value_uppercase <- id_type <- person_id <- NULL # to silence `check()`
-  if (.this_exists(object_data$id_value)) {
+  if (aidr::this_exists(object_data$id_value)) {
     result_df <- dplyr::tbl(connection, "person_identifiers") |>
       dplyr::filter(id_value_uppercase == toupper(object_data$id_value)) |>
       dplyr::collect()
@@ -298,7 +298,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       found <- result_df |>
         dplyr::mutate(similarity = 1, found_by = "identifier")
     }
-  } else if (.this_exists(object_data$id_type) && .this_exists(object_data$person_id)) {
+  } else if (aidr::this_exists(object_data$id_type) && aidr::this_exists(object_data$person_id)) {
     result_df <- dplyr::tbl(connection, "person_identifiers") |>
       dplyr::filter(id_type == object_data$id_type, person_id == object_data$person_id) |>
       dplyr::collect()
@@ -306,7 +306,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       found <- result_df |>
         dplyr::mutate(similarity = 1, found_by = "person_and_type")
     }
-  } else if (.this_exists(object_data$person_id)) {
+  } else if (aidr::this_exists(object_data$person_id)) {
     result_df <- dplyr::tbl(connection, "person_identifiers") |>
       dplyr::filter(person_id == object_data$person_id) |>
       dplyr::collect()
@@ -333,7 +333,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       pmid = object_data$pmid,
       pmcid = object_data$pmcid
     )
-    if (nrow(found) == 0 && .this_exists(object_data$issued)) {
+    if (nrow(found) == 0 && aidr::this_exists(object_data$issued)) {
       found <- .find_item_by_year_volume_page(
         connection = connection,
         year = lubridate::year(object_data$issued),
@@ -656,7 +656,7 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
             # look to see if this item person is in one of our focal people
             found_person <- .match_person(conn, this_person)
             found_person_issue <- NULL
-            if (.this_exists(found_person)) {
+            if (aidr::this_exists(found_person)) {
               if (nrow(found_person) == 1) {
                 this_person$person_id = found_person$person_id
               } else {
@@ -673,14 +673,14 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
                                                       augment_function = private$augmentors[["item_person"]])
 
             # if an issue was found earlier, add it to the database
-            if (.this_exists(found_person_issue)) {
+            if (aidr::this_exists(found_person_issue)) {
               found_person_issue$object_id <- this_item_person_id
               .insert_new_object(conn, "issue", found_person_issue,
                                  validate_function = private$validators[["issue"]],
                                  augment_function = private$augmentors[["issue"]],
                                  stage=stage)
             }
-            if (.this_exists(this_affiliation) && .this_exists(this_affiliation[[i]])) {
+            if (aidr::this_exists(this_affiliation) && aidr::this_exists(this_affiliation[[i]])) {
               for (j in seq_along(this_affiliation[[i]])) {
                 this_affiliation_entry <- list(
                   item_person_id = this_item_person_id,
