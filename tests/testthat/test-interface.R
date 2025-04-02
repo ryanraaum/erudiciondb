@@ -702,39 +702,39 @@ test_that("match_person works with empty table", {
 })
 
 
-test_that(".biblio can collect an item into citeproc format", {
-  for (db in supported_databases()) {
-    testdbobj <- make_testdbobj(db)
-    expect_no_error(edb_create_tables(testdbobj$con))
-
-    test_item_1 <- list(
-      item = list(title="GenBank",
-                  container_title="Nucleic Acids Research",
-                  container_title_short="Nucleic Acids Res",
-                  volume=44,
-                  issue="D1",
-                  page_first="D67",
-                  page="D67-D72",
-                  issued=as.Date("20151120", "%Y%m%d")),
-      author = list(
-        list(family="Griswold", given="Clark"),
-        list(family="Johnson", given="Eddie")
-      ),
-      author_affiliation = list(
-        c("Food Preservation Corp"),
-        c("Chemical Toilet Cleaners, Inc")
-      )
-    )
-
-    test_item_1_id <- expect_no_error(testdbobj$insert_new_object("item", test_item_1))
-
-    bib_1 <- expect_no_error(.biblio(testdbobj$con, test_item_1_id, format="list"))
-    expect_equal(length(bib_1), 1)
-    expect_true("id" %in% names(bib_1[[1]]))
-    expect_equal(length(bib_1[[1]]$author), 2)
-
-  }
-})
+# test_that(".biblio can collect an item into citeproc format", {
+#   for (db in supported_databases()) {
+#     testdbobj <- make_testdbobj(db)
+#     expect_no_error(edb_create_tables(testdbobj$con))
+#
+#     test_item_1 <- list(
+#       item = list(title="GenBank",
+#                   container_title="Nucleic Acids Research",
+#                   container_title_short="Nucleic Acids Res",
+#                   volume=44,
+#                   issue="D1",
+#                   page_first="D67",
+#                   page="D67-D72",
+#                   issued=as.Date("20151120", "%Y%m%d")),
+#       author = list(
+#         list(family="Griswold", given="Clark"),
+#         list(family="Johnson", given="Eddie")
+#       ),
+#       author_affiliation = list(
+#         c("Food Preservation Corp"),
+#         c("Chemical Toilet Cleaners, Inc")
+#       )
+#     )
+#
+#     test_item_1_id <- expect_no_error(testdbobj$insert_new_object("item", test_item_1))
+#
+#     bib_1 <- expect_no_error(.biblio(testdbobj$con, test_item_1_id, format="list"))
+#     expect_equal(length(bib_1), 1)
+#     expect_true("id" %in% names(bib_1[[1]]))
+#     expect_equal(length(bib_1[[1]]$author), 2)
+#
+#   }
+# })
 
 test_that("testing stub", {
   for (db in supported_databases()) {

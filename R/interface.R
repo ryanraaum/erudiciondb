@@ -489,14 +489,126 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 
-.biblio <- function(connection, item_id, format="json") {
-  items <- .find(connection, "item", list(item_id=item_id))
-  items <- apply(items, 1, as.list)
+.person_id_to_biblio_items <- function(connection, person_id) {
+  result_df <- fetched_results <- tibble::tibble()
+  # following to avoid check() notes
+  stage <- personlist_id <- NULL
+
+  this_person_id <- person_id
+  item_id <- NULL # hack to silence `check()`
+
+  if (aidr::this_exists(this_person_id)) {
+    item_persons_for_this_person_id <- dplyr::tbl(connection, "item_persons") |>
+      dplyr::filter(stage == 0, !is.na(person_id)) |>
+      dplyr::select(personlist_id, person_id) |>
+      dplyr::filter(person_id == this_person_id)
+
+    item_ids <- dplyr::tbl(connection, "personlists") |>
+      dplyr::filter(stage == 0) |>
+      dplyr::select(personlist_id, item_id) |>
+      dplyr::distinct() |>
+      dplyr::right_join(item_persons_for_this_person_id, by="personlist_id") |>
+      dplyr::select(item_id) |>
+      dplyr::distinct() |>
+      dplyr::collect()
+
+    result_df <- .item_ids_to_biblio_items(connection, item_ids)
+
+  }
+  result_df
+}
+
+
+.item_ids_to_biblio_items <- function(connection, item_ids) {
+  result_df <- fetched_results <- tibble::tibble()
+  # following to avoid check() notes
+  stage <- NULL
+
+  item_id_in_df <- NULL
+  if (is.data.frame(item_ids) && "item_id" %in% names(item_ids)) {
+    item_id_in_df <- item_ids[,"item_id"]
+  } else if (is.character(item_ids) || uuid::is.UUID(item_ids)) {
+    item_id_in_df <- tibble::tibble(item_id = uuid::as.UUID(item_ids))
+  } else {
+    return(result_df)
+  }
+
+  checked_out_con <- pool::poolCheckout(connection)
+  items_tbl <- dplyr::tbl(checked_out_con, "items") |> dplyr::filter(stage == 0)
+  all_items <- items_tbl |>
+    dplyr::right_join(item_id_in_df, by="item_id", copy=TRUE) |>
+    dplyr::collect()
+  pool::poolReturn(checked_out_con)
+
+  result_df <- .items_to_biblio_items(connection, all_items)
+
+  result_df
+}
+
+
+#' A function
+#'
+#' @param connection A pool database connection
+#' @param items A dataframe of items
+#'
+#' @return The dataframe with new mean and sum columns
+#' @importFrom rlang :=
+.items_to_biblio_items <- function(connection, items) {
+  result_df <- fetched_results <- tibble::tibble()
+  # following to avoid check notes
+  stage <- personlist_id <- item_id <- personlist_type <- NULL
+
+  if (aidr::this_exists(items)) {
+
+    just_item_ids <- items[,"item_id"]
+
+    checked_out_con <- pool::poolCheckout(connection)
+    personlists_tbl <- dplyr::tbl(checked_out_con, "personlists") |> dplyr::filter(stage == 0)
+    personlist_data <- personlists_tbl |>
+      dplyr::right_join(just_item_ids, by="item_id", copy=TRUE) |>
+      dplyr::select(personlist_id, item_id, personlist_type) |>
+      dplyr::collect()
+    pool::poolReturn(checked_out_con)
+
+    personlists_grouped_by_type <- personlist_data |>
+      dplyr::group_by(personlist_type)
+
+    personlists_by_type <- personlists_grouped_by_type |> dplyr::group_split(.keep=FALSE)
+    names(personlists_by_type) <- personlists_grouped_by_type |> dplyr::group_keys()
+
+    item_persons_by_type <- vector("list", length(personlists_by_type))
+    names(item_persons_by_type) <- names(personlists_by_type)
+
+    for (ptype in names(personlists_by_type)) {
+      checked_out_con <- pool::poolCheckout(connection)
+      this_item_persons_tbl <- dplyr::tbl(checked_out_con, "item_persons") |> dplyr::filter(stage == 0)
+      these_item_persons <- this_item_persons_tbl |>
+        dplyr::right_join(personlists_by_type[[ptype]], by="personlist_id", copy=TRUE) |>
+        dplyr::collect() |>
+        dplyr::group_by(item_id)
+      item_persons_by_type[[ptype]] <- tibble::tibble(
+        these_item_persons |> dplyr::group_keys(),
+        {{ptype}} := these_item_persons |> dplyr::group_split()
+      )
+      pool::poolReturn(checked_out_con)
+    }
+
+    combined_item_persons_by_personlist_type <- purrr::reduce(item_persons_by_type, dplyr::full_join, by = 'item_id')
+
+    result_df <- items |>
+      dplyr::left_join(combined_item_persons_by_personlist_type, by="item_id")
+
+  }
+  result_df
+}
+
+.biblio_items_to_csl_list <- function(bibitems) {
+  items <- apply(bibitems, 1, as.list)
   if (length(items) == 0) { return(list()) }
   names(items) <- sapply(items, '[[', "item_id")
   items <- items |>
-    .filter_na() |>
-    .filter_internal() |>
+    .lapply_filter_na() |>
+    .lapply_filter_internal() |>
     purrr::map(\(x) .rename_element(x, "citation_key", "id")) |>
     purrr::map(\(x) .rename_element(x, "container_title_short", "container-title-short")) |>
     purrr::map(\(x) .rename_element(x, "container_title", "container-title")) |>
@@ -526,56 +638,42 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     purrr::map(\(x) .rename_element(x, "title_short", "title-short")) |>
     purrr::map(\(x) .rename_element(x, "year_suffix", "year-suffix"))
 
-
-  plists <- .biblio_personlist(connection, item_id)
-
-  for (this_id in item_id) {
-    items[[this_id]] <- c(items[[this_id]], plists[[this_id]])
-  }
-
-  if (format == "json") {
-    names(items) <- NULL
-    items.json <- jsonlite::toJSON(items, pretty=TRUE, auto_unbox=TRUE)
-    return(items.json)
-  }
+  items <- items |>
+    purrr::map(.item_persons_to_biblio_persons)
 
   items
+
 }
 
-
-# do many at once
-.biblio_personlist <- function(connection, item_id) {
-  # just to silence check that doesn't understand piped tidy variables
+.item_persons_to_biblio_persons <- function(list_item) {
+  # to avoid check() notes
   position <- NULL
 
-  plists <- .retrieve(connection, "personlist", item_id, by="item_id", as_list=FALSE)
-  if (nrow(plists) == 0) { return(list()) }
+  plists <- base::intersect(valid_personlist_types, names(list_item))
+  if (length(plists) == 0) { return(list_item) }
 
-  persons <- .retrieve(connection, "item_person", plists$personlist_id, by="personlist_id", as_list=FALSE) |>
-    dplyr::rename( "dropping-particle" = "dropping_particle",
-                   "non-dropping-particle" = "non_dropping_particle",
-                   "comma-suffix" = "comma_suffix",
-                   "static-ordering" = "static_ordering",
-                   "parse-names" = "parse_names")
-  indexed_list <- split(persons, persons$personlist_id)  |>
-    purrr::map(\(x) dplyr::arrange(x, position)) |>
-    purrr::map(\(x) apply(x, 1, as.list)) |>
-    purrr::map(.filter_na) |>
-    purrr::map(.filter_internal)
+  for (this_type in plists) {
+    persons <- list_item[[this_type]] |>
+      dplyr::rename( "dropping-particle" = "dropping_particle",
+                     "non-dropping-particle" = "non_dropping_particle",
+                     "comma-suffix" = "comma_suffix",
+                     "static-ordering" = "static_ordering",
+                     "parse-names" = "parse_names")
+    list_item[[this_type]] <- persons |>
+      dplyr::arrange(position) |>
+      apply(1, as.list) |>
+      purrr::map(.filter_na) |>
+      purrr::map(\(x) .filter_internal(x, keep="person_id"))
 
-  item_personlists <- list()
-  for (this_item in unique(plists$item_id)) {
-    this_subset <- plists |> dplyr::filter(item_id == this_item)
-    this_plists <- this_subset$personlist_id
-    this_type <- this_subset$personlist_type
-    this_item_plist <- list()
-    for (i in seq_len(nrow(this_subset))) {
-      this_item_plist[[this_type[i]]] <- indexed_list[[this_plists[[i]]]]
-    }
-    item_personlists[[this_item]] <- this_item_plist
   }
 
-  item_personlists
+  list_item
+}
+
+.csl_list_to_json <- function(csl_list) {
+  names(csl_list) <- NULL
+  items.json <- jsonlite::toJSON(csl_list, pretty=TRUE, auto_unbox=TRUE)
+  return(items.json)
 }
 
 

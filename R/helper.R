@@ -168,16 +168,32 @@ valid_personlist_types <- c(
   this_value
 }
 
-.filter_na <- function(l) {
+.lapply_filter_na <- function(l) {
   lapply(l, function(x) x[!is.na(x)])
 }
 
-.is_internal <- function(l) {
-  stringr::str_detect(names(l), "_id$") | names(l) %in% c("position", "object_type", "created", "stage", "revision")
+.filter_na <- function(l) {
+  purrr::keep(l, \(x) !is.na(x))
 }
 
-.filter_internal <- function(l) {
+.filter_empty <- function(l) {
+  lapply(l, function(x) x[length(x) > 0])
+}
+
+.is_internal <- function(l, keep=NULL) {
+  decision <- stringr::str_detect(names(l), "_id$") | names(l) %in% c("position", "object_type", "created", "stage", "revision")
+  if (!is.null(keep)) {
+    decision[which(names(l) %in% keep)] <- FALSE
+  }
+  decision
+}
+
+.lapply_filter_internal <- function(l) {
   lapply(l, function(x) x[!.is_internal(x)])
+}
+
+.filter_internal <- function(l, keep=NULL) {
+  l[!.is_internal(l, keep)]
 }
 
 .rename_element <- function(l, from_name, to_name) {
