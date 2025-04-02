@@ -131,6 +131,15 @@ valid_personlist_types <- c(
   "series-creator"
 )
 
+item_date_columns <- c(
+  "accessed",
+  "available_date",
+  "event_date",
+  "issued",
+  "original_date",
+  "submitted"
+)
+
 # `item_data` is the object created by the `repo2cp` parsers
 # here, we are selecting the "best" surname for the citekey
 .select_surname <- function(item_data) {

@@ -597,7 +597,12 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 .biblio_items_to_csl_list <- function(bibitems) {
-  items <- apply(bibitems, 1, as.list)
+  # first, convert dates to character
+  # - because toJSON otherwise converts dates to seconds since 1970,
+  #    which pandoc bibliography processing does not like
+  items <- bibitems |>
+    dplyr::mutate(dplyr::across(dplyr::all_of(item_date_columns), as.character))
+  items <- apply(items, 1, as.list)
   if (length(items) == 0) { return(list()) }
   names(items) <- sapply(items, '[[', "item_id")
   items <- items |>
