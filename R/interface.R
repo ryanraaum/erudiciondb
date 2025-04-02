@@ -546,13 +546,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 
-#' A function
-#'
-#' @param connection A pool database connection
-#' @param items A dataframe of items
-#'
-#' @return The dataframe with new mean and sum columns
-#' @importFrom rlang :=
+
 .items_to_biblio_items <- function(connection, items) {
   result_df <- fetched_results <- tibble::tibble()
   # following to avoid check notes

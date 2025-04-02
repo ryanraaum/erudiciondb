@@ -40,6 +40,7 @@ Imports:
 Collate: 
     'augmentors.R'
     'create_tables.R'
+    'erudiciondb-package.R'
     'helper.R'
     'validators.R'
     'interface.R'
