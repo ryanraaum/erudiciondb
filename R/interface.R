@@ -795,6 +795,11 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
         return(this_item_id)
       })
       return(this_item_id)
+    },
+    #' @description
+    #' Clean up after removal of ErudicionDB object
+    finalize = function() {
+      self$disconnect()
     }
   ),
   public = list(
@@ -825,11 +830,6 @@ ErudicionDB <- R6::R6Class(classname = "erudicion_db_object", # inherit = R6P::S
         pool::poolClose(private$pool)
         private$pool <- NULL
       }
-    },
-    #' @description
-    #' Clean up after removal of ErudicionDB object
-    finalize = function() {
-      self$disconnect()
     },
     #' @description
     #' Generate a data frame interface to a database table

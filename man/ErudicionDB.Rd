@@ -22,7 +22,6 @@ Interface for an ErudicionDB.
 \item \href{#method-erudicion_db_object-new}{\code{ErudicionDB$new()}}
 \item \href{#method-erudicion_db_object-establish_connection}{\code{ErudicionDB$establish_connection()}}
 \item \href{#method-erudicion_db_object-disconnect}{\code{ErudicionDB$disconnect()}}
-\item \href{#method-erudicion_db_object-finalize}{\code{ErudicionDB$finalize()}}
 \item \href{#method-erudicion_db_object-tbl}{\code{ErudicionDB$tbl()}}
 \item \href{#method-erudicion_db_object-add_validator}{\code{ErudicionDB$add_validator()}}
 \item \href{#method-erudicion_db_object-add_augmentor}{\code{ErudicionDB$add_augmentor()}}
@@ -40,6 +39,9 @@ Interface for an ErudicionDB.
 \if{latex}{\out{\hypertarget{method-erudicion_db_object-new}{}}}
 \subsection{Method \code{new()}}{
 Insert a new item from an online repository
+
+
+Clean up after removal of ErudicionDB object
 
 
 Create new ErudicionDB object
@@ -83,16 +85,6 @@ Create ErudicionDB object and connect to a database
 Disconnect from a database
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$disconnect()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-erudicion_db_object-finalize"></a>}}
-\if{latex}{\out{\hypertarget{method-erudicion_db_object-finalize}{}}}
-\subsection{Method \code{finalize()}}{
-Clean up after removal of ErudicionDB object
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ErudicionDB$finalize()}\if{html}{\out{</div>}}
 }
 
 }
