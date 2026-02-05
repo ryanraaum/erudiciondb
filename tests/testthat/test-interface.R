@@ -127,7 +127,7 @@ test_that("object can be inserted and retrieved from database", {
     expect_equal(new_person_1$surnames, retrieved_person_1$surnames)
 
     # can we pull a specific revision?
-    retrieved_people_2 <- expect_no_condition(testdbobj$retrieve("person", new_person_1_id, rev = 1))
+    retrieved_people_2 <- expect_no_condition(testdbobj$retrieve("person", new_person_1_id, revision = 1))
 
     expect_true(length(retrieved_people_2) == 1)
     retrieved_person_2 <- retrieved_people_2[[1]]
@@ -158,7 +158,7 @@ test_that("ErudicionDB interface can insert and retrieve object from database", 
 
     # can we pull a specific revision?
     retrieved_people_2 <- expect_no_condition(.retrieve(testcon, "person", new_person_1_id,
-                                                        rev = 1))
+                                                        revision = 1))
 
     expect_true(length(retrieved_people_2) == 1)
     retrieved_person_2 <- retrieved_people_2[[1]]
@@ -467,6 +467,18 @@ test_that(".revise_object properly updates existing objects", {
   }
 })
 
+test_that(".next_revision throws error for non-existent object", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Test with a non-existent UUID
+    fake_uuid <- uuid::UUIDgenerate()
+    expect_error(.next_revision(testcon, "item", fake_uuid),
+                 regexp = "not found")
+  }
+})
+
 test_that(".destage_one properly destages object in database", {
   for (db in supported_databases()) {
     testcon <- make_testcon(db)
@@ -528,6 +540,37 @@ test_that(".update_object does what it should", {
 
     updated_object <- expect_no_condition(.retrieve(testcon, "item", updated_object_id))[[1]]
     expect_equal(updated_object$title, new_title)
+  }
+})
+
+test_that(".update_object maintains only one active revision", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Create initial item
+    proto_new_item <- list(title="Test Item", volume=1)
+    new_item <- expect_no_condition(.new_object(testcon, "item", proto_new_item))
+    new_item_id <- expect_no_condition(.insert_one(testcon, new_item))
+
+    # Perform update
+    databased_object <- expect_no_condition(.retrieve(testcon, "item", new_item_id))[[1]]
+    updated_object_id <- expect_no_condition(.update_object(testcon, databased_object, volume=2))
+
+    # Verify only one revision has stage=0
+    all_revisions <- expect_no_condition(.retrieve(testcon, "item", new_item_id,
+                                                   stage=0, revision="all", as_list=FALSE))
+    expect_equal(nrow(all_revisions), 1,
+                 info="Only one revision should have stage=0 after update")
+    expect_equal(all_revisions$revision, 2)
+    expect_equal(all_revisions$volume, "2")
+
+    # Verify old revision is destaged
+    old_revisions <- expect_no_condition(.retrieve(testcon, "item", new_item_id,
+                                                   stage=-1, revision="all", as_list=FALSE))
+    expect_equal(nrow(old_revisions), 1)
+    expect_equal(old_revisions$revision, 1)
+    expect_equal(old_revisions$volume, "1")
   }
 })
 
@@ -605,7 +648,7 @@ test_that("ErudicionDB object can insert and retrieve objects from database", {
 
     # can we pull a specific revision?
     retrieved_people_2 <- expect_no_condition(testdbobj$retrieve("person", new_person_1_id,
-                                                        rev = 1))
+                                                        revision = 1))
 
     expect_true(length(retrieved_people_2) == 1)
     retrieved_person_2 <- retrieved_people_2[[1]]

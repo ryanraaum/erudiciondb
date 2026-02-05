@@ -42,11 +42,15 @@
 .next_revision <- function(connection, object_type, object_id) {
   object_table <- glue::glue("{object_type}s")
   object_id_name <- glue::glue("{object_type}_id")
-  current_max <- dplyr::tbl(connection, object_table) |>
+  revisions <- dplyr::tbl(connection, object_table) |>
     dplyr::filter(!!rlang::sym(object_id_name) == object_id) |>
-    dplyr::pull("revision") |>
-    max()
-  current_max + 1
+    dplyr::pull("revision")
+
+  if (length(revisions) == 0) {
+    stop(glue::glue("Object {object_id} not found in {object_table}"))
+  }
+
+  max(revisions) + 1
 }
 
 .revise_object <- function(connection, this_object, ...) {
@@ -78,13 +82,14 @@
 
 # "update" = *revise* and then *insert* object into database
 # - in this process, will also deactivate (stage = -1) current object in db
+# - destage before insert to prevent race condition where two revisions have stage=0
 .update_object <- function(connection, this_object, ...) {
   revised_object <- .revise_object(connection, this_object, ...)
   DBI::dbBegin(connection)
   object_insertions_outcome <- try({
-    revised_object_id <- .insert_one(connection, revised_object)
     unstaging_outcome <- .destage_one(connection, this_object)
     if (!unstaging_outcome) { stop("destaging error") }
+    revised_object_id <- .insert_one(connection, revised_object)
   }, silent=TRUE)
   if (inherits(object_insertions_outcome, "try-error")) {
     DBI::dbRollback(connection)
@@ -164,7 +169,7 @@
 
   object <- dplyr::tbl(connection, table_name) |>
     dplyr::filter(!!rlang::sym(id_name) %in% object_id) |>
-    dplyr::filter(stage == stage) |>
+    dplyr::filter(.data$stage == !!stage) |>
     .make_revision_filter(revision)() |>
     dplyr::collect() |>
     dplyr::mutate(object_type = object_type)

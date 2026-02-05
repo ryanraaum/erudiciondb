@@ -3,3 +3,4 @@
 export(ErudicionDB)
 export(edb_create_tables)
 importFrom(rlang,":=")
+importFrom(rlang,.data)
