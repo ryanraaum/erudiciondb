@@ -1099,23 +1099,25 @@ test_that(".person_id_to_biblio_items retrieves items across different roles", {
     person_id <- testdbobj$insert_new_object("person",
       list(primary_given_names="Jane", surnames="Smith"))
 
-    # Create multiple items where person is author
+    # Item where person is author
     item1_id <- testdbobj$insert_new_object("item", list(
       item = list(title="Article 1"),
       author = list(list(family="Smith", given="Jane"))
     ))
 
+    # Item where person is editor
     item2_id <- testdbobj$insert_new_object("item", list(
-      item = list(title="Article 2"),
-      author = list(list(family="Smith", given="Jane"))
+      item = list(title="Book 1"),
+      editor = list(list(family="Smith", given="Jane"))
     ))
 
     # Retrieve bibliography items
     bibitems <- .person_id_to_biblio_items(testdbobj$con, person_id)
 
-    # Should have both items
+    # Should have both items with different personlist types
     expect_equal(nrow(bibitems), 2)
     expect_true("author" %in% colnames(bibitems))
+    expect_true("editor" %in% colnames(bibitems))
     expect_true(all(c(item1_id, item2_id) %in% bibitems$item_id))
   }
 })
@@ -1253,25 +1255,21 @@ test_that(".biblio_items_to_csl_list handles personlist with multiple persons", 
     testdbobj <- make_testdbobj(db)
     expect_no_error(edb_create_tables(testdbobj$con))
 
-    # Create item with multiple authors
+    # Create item with multiple personlist types
     item_id <- testdbobj$insert_new_object("item", list(
-      item = list(title="Multi-Author Paper"),
-      author = list(
-        list(family="Smith", given="Jane"),
-        list(family="Doe", given="John"),
-        list(family="Garcia", given="Maria")
-      )
+      item = list(title="Edited Book"),
+      author = list(list(family="Smith", given="Jane")),
+      editor = list(list(family="Doe", given="John")),
+      translator = list(list(family="Garcia", given="Maria"))
     ))
 
     bibitems <- .item_ids_to_biblio_items(testdbobj$con, item_id)
     csl_list <- .biblio_items_to_csl_list(bibitems)
 
-    # Verify personlist present with all authors
+    # Verify all personlist types present
     expect_true("author" %in% names(csl_list[[1]]))
-    expect_equal(length(csl_list[[1]]$author), 3)
-    expect_equal(csl_list[[1]]$author[[1]]$family, "Smith")
-    expect_equal(csl_list[[1]]$author[[2]]$family, "Doe")
-    expect_equal(csl_list[[1]]$author[[3]]$family, "Garcia")
+    expect_true("editor" %in% names(csl_list[[1]]))
+    expect_true("translator" %in% names(csl_list[[1]]))
   }
 })
 
@@ -1414,17 +1412,17 @@ test_that("bibliography functions handle different CSL item types", {
       author = list(list(family="Smith", given="Jane"))
     ))
 
-    # Article
-    article_id <- testdbobj$insert_new_object("item", list(
+    # Chapter (has both author and editor)
+    chapter_id <- testdbobj$insert_new_object("item", list(
       item = list(
-        type="article-journal",
-        title="Journal Article",
-        container_title="Science Journal",
-        volume=10,
+        type="chapter",
+        title="Chapter Title",
+        container_title="Book Title",
         page="10-25",
         issued=as.Date("20200101", "%Y%m%d")
       ),
-      author = list(list(family="Doe", given="John"))
+      author = list(list(family="Doe", given="John")),
+      editor = list(list(family="Smith", given="Jane"))
     ))
 
     # Report
@@ -1441,51 +1439,72 @@ test_that("bibliography functions handle different CSL item types", {
 
     # Convert all to CSL
     bibitems <- .item_ids_to_biblio_items(testdbobj$con,
-      c(book_id, article_id, report_id))
+      c(book_id, chapter_id, report_id))
     csl_list <- .biblio_items_to_csl_list(bibitems)
 
     # Verify all types present
     expect_equal(length(csl_list), 3)
     types <- sapply(csl_list, function(x) x$type)
     expect_true("book" %in% types)
-    expect_true("article-journal" %in% types)
+    expect_true("chapter" %in% types)
     expect_true("report" %in% types)
   }
 })
 
 # Test 7: All personlist types
 
-test_that("bibliography functions handle different personlist types separately", {
+test_that("bibliography functions handle multiple personlist types in single item", {
   for (db in supported_databases()) {
     testdbobj <- make_testdbobj(db)
     expect_no_error(edb_create_tables(testdbobj$con))
 
-    # Test several important personlist types in separate items
-    # (avoid multi-type items due to bug in R/interface.R:613)
-    author_item_id <- testdbobj$insert_new_object("item", list(
-      item = list(title="Item with author"),
-      author = list(list(family="Smith", given="Jane"))
-    ))
-
-    editor_item_id <- testdbobj$insert_new_object("item", list(
-      item = list(title="Item with editor"),
-      editor = list(list(family="Doe", given="John"))
-    ))
-
-    translator_item_id <- testdbobj$insert_new_object("item", list(
-      item = list(title="Item with translator"),
+    # Create item with multiple personlist types
+    item_id <- testdbobj$insert_new_object("item", list(
+      item = list(title="Multi-role Publication"),
+      author = list(list(family="Smith", given="Jane")),
+      editor = list(list(family="Doe", given="John")),
       translator = list(list(family="Garcia", given="Maria"))
     ))
 
-    # Convert each to bibliography separately
-    author_bibitems <- .item_ids_to_biblio_items(testdbobj$con, author_item_id)
-    expect_true("author" %in% colnames(author_bibitems))
+    # Convert to bibliography
+    bibitems <- .item_ids_to_biblio_items(testdbobj$con, item_id)
 
-    editor_bibitems <- .item_ids_to_biblio_items(testdbobj$con, editor_item_id)
-    expect_true("editor" %in% colnames(editor_bibitems))
+    # Verify all personlist types present as columns
+    expect_true("author" %in% colnames(bibitems))
+    expect_true("editor" %in% colnames(bibitems))
+    expect_true("translator" %in% colnames(bibitems))
 
-    translator_bibitems <- .item_ids_to_biblio_items(testdbobj$con, translator_item_id)
-    expect_true("translator" %in% colnames(translator_bibitems))
+    # Verify each list has correct person
+    expect_equal(bibitems$author[[1]]$family[1], "Smith")
+    expect_equal(bibitems$editor[[1]]$family[1], "Doe")
+    expect_equal(bibitems$translator[[1]]$family[1], "Garcia")
+  }
+})
+
+test_that(".items_to_biblio_items correctly handles items with multiple personlist types (regression test)", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Create item with both author and editor (the bug scenario)
+    item1_id <- testdbobj$insert_new_object("item", list(
+      item = list(title="Chapter in Edited Volume"),
+      author = list(list(family="AuthorLast", given="AuthorFirst")),
+      editor = list(list(family="EditorLast", given="EditorFirst"))
+    ))
+
+    # This should not error with "names() must be the same length"
+    bibitems <- expect_no_error(
+      .items_to_biblio_items(testdbobj$con, tibble::tibble(item_id=item1_id))
+    )
+
+    # Verify both personlist types are present as properly named columns
+    expect_true("author" %in% colnames(bibitems))
+    expect_true("editor" %in% colnames(bibitems))
+
+    # Verify the data is correct
+    expect_equal(bibitems$author[[1]]$family[1], "AuthorLast")
+    expect_equal(bibitems$editor[[1]]$family[1], "EditorLast")
   }
 })
 

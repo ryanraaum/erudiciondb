@@ -610,7 +610,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       dplyr::group_by(personlist_type)
 
     personlists_by_type <- personlists_grouped_by_type |> dplyr::group_split(.keep=FALSE)
-    names(personlists_by_type) <- personlists_grouped_by_type |> dplyr::group_keys()
+    names(personlists_by_type) <- (personlists_grouped_by_type |> dplyr::group_keys())$personlist_type
 
     item_persons_by_type <- vector("list", length(personlists_by_type))
     names(item_persons_by_type) <- names(personlists_by_type)
@@ -624,7 +624,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
           dplyr::collect() |>
           dplyr::group_by(item_id)
         item_persons_by_type[[ptype]] <- tibble::tibble(
-          these_item_persons |> dplyr::group_keys(),
+          item_id = (these_item_persons |> dplyr::group_keys())$item_id,
           {{ptype}} := these_item_persons |> dplyr::group_split()
         )
       }, finally = {

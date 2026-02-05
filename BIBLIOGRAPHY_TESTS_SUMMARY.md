@@ -68,27 +68,27 @@ Implemented comprehensive test coverage for bibliography functions in ErudicionD
 
 ## Known Issues
 
-### Bug Discovered in Production Code
+### ~~Bug Discovered in Production Code~~ FIXED (2026-02-05)
 
-**Location**: `R/interface.R:613`
+**Location**: `R/interface.R:613, 627`
 **Function**: `.items_to_biblio_items()`
 
-```r
-names(personlists_by_type) <- personlists_grouped_by_type |> dplyr::group_keys()
-```
-
-**Problem**: `dplyr::group_keys()` returns a tibble, not a character vector. When items have multiple different personlist types (e.g., both "author" AND "editor"), this causes:
+**Problem**: `dplyr::group_keys()` returns a tibble, not a character vector. When items have multiple different personlist types (e.g., both "author" AND "editor"), this caused:
 
 ```
 Error: 'names()' must be the same length as x
 ```
 
-**Fix Needed**:
+**Fix Applied**:
 ```r
+# Line 613
 names(personlists_by_type) <- (personlists_grouped_by_type |> dplyr::group_keys())$personlist_type
+
+# Line 627
+item_id = (these_item_persons |> dplyr::group_keys())$item_id,
 ```
 
-**Workaround**: Tests that would expose this bug were modified to test single personlist types per item.
+**Tests Updated**: All tests now properly test multi-personlist-type scenarios, and a new regression test was added to prevent this bug from recurring.
 
 ### DuckDB Test Limitations
 
@@ -140,7 +140,7 @@ These are test infrastructure issues, not bugs in the bibliography functions the
 
 ## Future Improvements
 
-1. **Fix Production Bug**: Address R/interface.R:613 to allow multi-personlist-type items
+1. ~~**Fix Production Bug**: Address R/interface.R:613 to allow multi-personlist-type items~~ ✅ COMPLETED
 2. **DuckDB Support**: Investigate and resolve DuckDB test failures
 3. **Performance Tests**: Add tests for large bibliography generation
 4. **External Validation**: Consider testing JSON output with external CSL processors (pandoc, citeproc)
