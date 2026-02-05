@@ -1,0 +1,10 @@
+{
+  "includeCoAuthoredBy": false,
+  "gitAttribution": false,
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\\\Program Files\\\\R\\\\bin\\\\Rscript.exe\" -e \"testthat::test_file\\(''tests/testthat/test-interface.R''\\)\")",
+      "Bash(cmd /c:*)"
+    ]
+  }
+}
