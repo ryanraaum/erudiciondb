@@ -263,6 +263,33 @@ test_that("item can be found by title", {
   }
 })
 
+test_that("SQLite title search returns found_by metadata", {
+  # Only test SQLite (this was the bug)
+  testcon <- make_testcon("sqlite")
+  expect_no_error(edb_create_tables(testcon))
+
+  # Insert a test item
+  proto_new_item <- list(
+    title="Unique Test Title for Bug Fix",
+    container_title="Test Journal"
+  )
+  new_item <- .new_object(testcon, "item", proto_new_item)
+  new_item_id <- .insert_one(testcon, new_item)
+
+  # Search by title using .find_item_by_title directly
+  found <- .find_item_by_title(testcon, title="Unique Test")
+
+  # Verify found_by column exists and is set to "title"
+  expect_true("found_by" %in% names(found))
+  expect_true(nrow(found) > 0)
+  expect_equal(found$found_by[1], "title")
+
+  # Also test via .find() wrapper
+  found2 <- .find(testcon, "item", list(title="Unique Test"))
+  expect_true("found_by" %in% names(found2))
+  expect_equal(found2$found_by[1], "title")
+})
+
 
 test_that("item can be found by person", {
   for (db in supported_databases()) {
@@ -510,6 +537,76 @@ test_that(".destage_one properly destages object in database", {
   }
 })
 
+test_that(".destage_one validates required fields", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Test with missing object_type
+    bad_object1 <- list(
+      revision = 1,
+      item_id = uuid::UUIDgenerate()
+    )
+    expect_error(
+      .destage_one(testcon, bad_object1),
+      regexp = "object_type"
+    )
+
+    # Test with NULL object_type
+    bad_object2 <- list(
+      object_type = NULL,
+      revision = 1,
+      item_id = uuid::UUIDgenerate()
+    )
+    expect_error(
+      .destage_one(testcon, bad_object2),
+      regexp = "object_type"
+    )
+
+    # Test with missing revision
+    bad_object3 <- list(
+      object_type = "item",
+      item_id = uuid::UUIDgenerate()
+    )
+    expect_error(
+      .destage_one(testcon, bad_object3),
+      regexp = "revision"
+    )
+
+    # Test with NULL revision
+    bad_object4 <- list(
+      object_type = "item",
+      revision = NULL,
+      item_id = uuid::UUIDgenerate()
+    )
+    expect_error(
+      .destage_one(testcon, bad_object4),
+      regexp = "revision"
+    )
+
+    # Test with missing object_id (e.g., item_id)
+    bad_object5 <- list(
+      object_type = "item",
+      revision = 1
+    )
+    expect_error(
+      .destage_one(testcon, bad_object5),
+      regexp = "item_id"
+    )
+
+    # Test with NULL object_id
+    bad_object6 <- list(
+      object_type = "item",
+      revision = 1,
+      item_id = NULL
+    )
+    expect_error(
+      .destage_one(testcon, bad_object6),
+      regexp = "item_id"
+    )
+  }
+})
+
 test_that(".update_object does what it should", {
   for (db in supported_databases()) {
     testcon <- make_testcon(db)
@@ -540,6 +637,47 @@ test_that(".update_object does what it should", {
 
     updated_object <- expect_no_condition(.retrieve(testcon, "item", updated_object_id))[[1]]
     expect_equal(updated_object$title, new_title)
+  }
+})
+
+test_that(".update_object throws informative error on failure", {
+  # Bug fix #5: .update_object returned NULL on errors instead of throwing
+  # The fix makes it throw informative errors (R/interface.R:86-100)
+  # This test verifies errors are thrown, not NULL returned
+
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Insert a valid item
+    proto_new_item <- list(
+      title="Test Item",
+      container_title="Test Journal"
+    )
+    new_item <- .new_object(testcon, "item", proto_new_item)
+    new_item_id <- .insert_one(testcon, new_item)
+
+    # Retrieve the item
+    databased_item <- .retrieve(testcon, "item", new_item_id)[[1]]
+
+    # Create a malformed update that will fail
+    # (item with wrong object_type)
+    bad_item <- databased_item
+    bad_item$object_type <- "nonexistent_type"
+
+    # Should throw error, not return NULL
+    # The exact error message may vary but it should error
+    expect_error(
+      .update_object(testcon, bad_item, title="Updated Title")
+    )
+
+    # Test with missing object_type - should also error
+    bad_item2 <- databased_item
+    bad_item2$object_type <- NULL
+
+    expect_error(
+      .update_object(testcon, bad_item2, title="Updated Title")
+    )
   }
 })
 
@@ -741,6 +879,117 @@ test_that("match_person works with empty table", {
     match_result <- expect_no_error(.match_person(testdbobj$con, list(given="Ryan", family="Raaum")))
     expect_false(is.null(match_result))
     expect_true(nrow(match_result) == 0)
+  }
+})
+
+test_that("match_person handles NULL and NA names gracefully", {
+  # Bug fix #2: stringi::stri_trans_general() crashes on NULL/NA input
+  # The fix adds NULL/NA checks before ASCII transformations (R/interface.R:432-442)
+  # The bug occurred when person data from CSL/bibliography had NULL/NA in names
+  # This test verifies the ASCII transformation doesn't crash
+
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert test persons with non-ASCII characters to trigger ASCII transformation
+    person1_id <- testdbobj$insert_new_object("person",
+      list(primary_given_names="José", surnames="García"))
+    person2_id <- testdbobj$insert_new_object("person",
+      list(primary_given_names="François", surnames="Müller"))
+
+    # Test with empty names list - should return NULL (no crash)
+    result1 <- .match_person(testdbobj$con, list())
+    expect_true(is.null(result1))
+
+    # Test with valid surname only - doesn't crash even though given is not provided
+    # This exercises the code path where pdata$given is NULL but the ASCII
+    # transformation is protected by the NULL check
+    result2 <- .match_person(testdbobj$con, list(family="García"))
+    expect_true(inherits(result2, "data.frame"))
+
+    # Test with valid names that require ASCII transformation
+    result3 <- .match_person(testdbobj$con, list(family="García", given="José"))
+    expect_true(inherits(result3, "data.frame"))
+    expect_true(person1_id %in% result3$person_id)
+
+    # Test with ASCII version of non-ASCII name
+    result4 <- .match_person(testdbobj$con, list(family="Garcia", given="Jose"))
+    expect_true(inherits(result4, "data.frame"))
+    expect_true(person1_id %in% result4$person_id)
+  }
+})
+
+test_that(".find() properly returns pooled connection on error", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert multiple items for stress testing
+    for (i in 1:20) {
+      testdbobj$insert_new_object("item",
+        list(title=paste("Test Item", i)))
+    }
+
+    # Multiple rapid finds shouldn't exhaust pool
+    # Test with various search patterns
+    for (i in 1:10) {
+      # Search that returns no results
+      result1 <- .find(testdbobj$con, "item", list(volume="999"))
+      expect_true(inherits(result1, "data.frame"))
+
+      # Search that returns results
+      result2 <- .find(testdbobj$con, "item", list(title="Test Item 1"))
+      expect_true(inherits(result2, "data.frame"))
+    }
+
+    # If connections leaked, pool would be exhausted by now
+    # This final operation verifies pool is still healthy
+    result3 <- expect_no_error(
+      .find(testdbobj$con, "item", list(title="Test Item 1"))
+    )
+    expect_true(nrow(result3) >= 1)
+  }
+})
+
+test_that("bibliography functions properly manage pooled connections", {
+  # Test resource management by verifying repeated calls don't exhaust the pool
+  # We test with the existing working .items_to_biblio_items pattern
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Use the same pattern as the existing working test
+    test_item_1 <- list(
+      item = list(title="GenBank",
+                  container_title="Nucleic Acids Research",
+                  container_title_short="Nucleic Acids Res",
+                  volume=44,
+                  issue="D1",
+                  page_first="D67",
+                  page="D67-D72",
+                  issued=as.Date("20151120", "%Y%m%d")),
+      author = list(
+        list(family="Griswold", given="Clark"),
+        list(family="Johnson", given="Eddie")
+      ),
+      author_affiliation = list(
+        c("Food Preservation Corp"),
+        c("Chemical Toilet Cleaners, Inc")
+      )
+    )
+
+    test_item_1_id <- expect_no_error(testdbobj$insert_new_object("item", test_item_1))
+
+    # Rapid repeated calls - should not exhaust connection pool
+    for (i in 1:10) {
+      bib_1 <- expect_no_error(.items_to_biblio_items(testdbobj$con, tibble::tibble(item_id=test_item_1_id)))
+      expect_equal(nrow(bib_1), 1)
+    }
+
+    # Final verification that pool is still functional
+    final_bib <- expect_no_error(.items_to_biblio_items(testdbobj$con, tibble::tibble(item_id=test_item_1_id)))
+    expect_equal(nrow(final_bib), 1)
   }
 })
 

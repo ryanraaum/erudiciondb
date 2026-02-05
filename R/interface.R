@@ -93,7 +93,8 @@
   }, silent=TRUE)
   if (inherits(object_insertions_outcome, "try-error")) {
     DBI::dbRollback(connection)
-    return(NULL)
+    error_msg <- attr(object_insertions_outcome, "condition")$message
+    stop(glue::glue("Failed to update object: {error_msg}"))
   }
   DBI::dbCommit(connection)
   revised_object_id
@@ -126,10 +127,23 @@
 
 # object exists in the database
 .destage_one <- function(connection, object) {
+  # Validate required fields
+  if (!("object_type" %in% names(object)) || is.null(object$object_type)) {
+    stop("Object missing required 'object_type' field")
+  }
+  if (!("revision" %in% names(object)) || is.null(object$revision)) {
+    stop("Object missing required 'revision' field")
+  }
+
   object_type <- object$object_type
   table_name <- glue::glue("{object_type}s")
   object_id_name <- glue::glue("{object_type}_id")
   object_id <- object[[object_id_name]]
+
+  if (is.null(object_id)) {
+    stop(glue::glue("Object missing required '{object_id_name}' field"))
+  }
+
   update_statement <- glue::glue_sql("UPDATE {`table_name`} SET stage = -1 WHERE {`object_id_name`} = {object_id} AND revision = {object$revision}",
                                      .con = connection)
   nrows_affected <- DBI::dbExecute(connection, update_statement)
@@ -236,7 +250,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 .find_item_by_title <- function(connection, title) {
-  result_df <- fetched_results <- EMPTY_FIND_RESULT
+  result_df <- EMPTY_FIND_RESULT
 
   if (aidr::this_exists(title)) {
     search_title_nchar <- nchar(title)
@@ -251,16 +265,22 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
         dplyr::collect() |>
         dplyr::mutate(similarity = 1-stringdist::stringdist(tolower(search_title), substring(tolower(title), 1, search_title_nchar), method="jw")) |>
         dplyr::select(-title)
+
+      if (nrow(result_df) > 0) {
+        result_df <- result_df |>
+          dplyr::mutate(found_by = "title")
+      }
     } else {
       search_query <- glue::glue_sql("
     SELECT
       item_id, stage, revision, jaro_winkler_similarity(lower({title}), substring(lower(title),1,{search_title_nchar})) as similarity
     FROM items WHERE similarity >= 0.9", .con = connection)
-      fetched_results <- DBI::dbGetQuery(connection, search_query)
-    }
-    if (nrow(fetched_results) > 0) {
-      result_df <- fetched_results |>
-        dplyr::mutate(found_by = "title")
+      result_df <- DBI::dbGetQuery(connection, search_query)
+
+      if (nrow(result_df) > 0) {
+        result_df <- result_df |>
+          dplyr::mutate(found_by = "title")
+      }
     }
   }
   result_df
@@ -365,12 +385,14 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if (nrow(found) == 0) {
     con <- pool::poolCheckout(connection)
 
-    search_table <- dplyr::tbl(con, glue::glue("{object_type}s"))
-    found <- search_table |>
-      dplyr::inner_join(tibble::as_tibble(object_data), copy=TRUE) |>
-      dplyr::collect()
-
-    pool::poolReturn(con)
+    tryCatch({
+      search_table <- dplyr::tbl(con, glue::glue("{object_type}s"))
+      found <- search_table |>
+        dplyr::inner_join(tibble::as_tibble(object_data), copy=TRUE) |>
+        dplyr::collect()
+    }, finally = {
+      pool::poolReturn(con)
+    })
   }
 
   found <- found |>
@@ -407,8 +429,17 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   #   mutate(given_ascii = stringi::stri_trans_general(given, id = "Latin-ASCII"),
   #          family_ascii = stringi::stri_trans_general(family, id = "Latin-ASCII"))
 
-  pdata$given_ascii = tolower(stringi::stri_trans_general(pdata$given, id = "Latin-ASCII"))
-  pdata$family_ascii = tolower(stringi::stri_trans_general(pdata$family, id = "Latin-ASCII"))
+  pdata$given_ascii <- if (!is.null(pdata$given) && !is.na(pdata$given)) {
+    tolower(stringi::stri_trans_general(pdata$given, id = "Latin-ASCII"))
+  } else {
+    NA_character_
+  }
+
+  pdata$family_ascii <- if (!is.null(pdata$family) && !is.na(pdata$family)) {
+    tolower(stringi::stri_trans_general(pdata$family, id = "Latin-ASCII"))
+  } else {
+    NA_character_
+  }
 
   # Instead of sending a bunch of queries to the database,
   #  just pull the full `persons` table here.
@@ -539,11 +570,14 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   }
 
   checked_out_con <- pool::poolCheckout(connection)
-  items_tbl <- dplyr::tbl(checked_out_con, "items") |> dplyr::filter(stage == 0)
-  all_items <- items_tbl |>
-    dplyr::right_join(item_id_in_df, by="item_id", copy=TRUE) |>
-    dplyr::collect()
-  pool::poolReturn(checked_out_con)
+  tryCatch({
+    items_tbl <- dplyr::tbl(checked_out_con, "items") |> dplyr::filter(stage == 0)
+    all_items <- items_tbl |>
+      dplyr::right_join(item_id_in_df, by="item_id", copy=TRUE) |>
+      dplyr::collect()
+  }, finally = {
+    pool::poolReturn(checked_out_con)
+  })
 
   result_df <- .items_to_biblio_items(connection, all_items)
 
@@ -562,12 +596,15 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     just_item_ids <- items[,"item_id"]
 
     checked_out_con <- pool::poolCheckout(connection)
-    personlists_tbl <- dplyr::tbl(checked_out_con, "personlists") |> dplyr::filter(stage == 0)
-    personlist_data <- personlists_tbl |>
-      dplyr::right_join(just_item_ids, by="item_id", copy=TRUE) |>
-      dplyr::select(personlist_id, item_id, personlist_type) |>
-      dplyr::collect()
-    pool::poolReturn(checked_out_con)
+    tryCatch({
+      personlists_tbl <- dplyr::tbl(checked_out_con, "personlists") |> dplyr::filter(stage == 0)
+      personlist_data <- personlists_tbl |>
+        dplyr::right_join(just_item_ids, by="item_id", copy=TRUE) |>
+        dplyr::select(personlist_id, item_id, personlist_type) |>
+        dplyr::collect()
+    }, finally = {
+      pool::poolReturn(checked_out_con)
+    })
 
     personlists_grouped_by_type <- personlist_data |>
       dplyr::group_by(personlist_type)
@@ -580,16 +617,19 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
     for (ptype in names(personlists_by_type)) {
       checked_out_con <- pool::poolCheckout(connection)
-      this_item_persons_tbl <- dplyr::tbl(checked_out_con, "item_persons") |> dplyr::filter(stage == 0)
-      these_item_persons <- this_item_persons_tbl |>
-        dplyr::right_join(personlists_by_type[[ptype]], by="personlist_id", copy=TRUE) |>
-        dplyr::collect() |>
-        dplyr::group_by(item_id)
-      item_persons_by_type[[ptype]] <- tibble::tibble(
-        these_item_persons |> dplyr::group_keys(),
-        {{ptype}} := these_item_persons |> dplyr::group_split()
-      )
-      pool::poolReturn(checked_out_con)
+      tryCatch({
+        this_item_persons_tbl <- dplyr::tbl(checked_out_con, "item_persons") |> dplyr::filter(stage == 0)
+        these_item_persons <- this_item_persons_tbl |>
+          dplyr::right_join(personlists_by_type[[ptype]], by="personlist_id", copy=TRUE) |>
+          dplyr::collect() |>
+          dplyr::group_by(item_id)
+        item_persons_by_type[[ptype]] <- tibble::tibble(
+          these_item_persons |> dplyr::group_keys(),
+          {{ptype}} := these_item_persons |> dplyr::group_split()
+        )
+      }, finally = {
+        pool::poolReturn(checked_out_con)
+      })
     }
 
     combined_item_persons_by_personlist_type <- purrr::reduce(item_persons_by_type, dplyr::full_join, by = 'item_id')

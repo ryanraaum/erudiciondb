@@ -33,6 +33,38 @@ test_that(".select_surname works", {
   expect_true(is.na(.select_surname(test_item_3)))
 })
 
+test_that(".select_surname handles edge cases", {
+  # Test with empty personlists (no author, editor, etc.)
+  test_item_empty <- list(
+    item = list(title="Item with no creators")
+  )
+  expect_true(is.na(.select_surname(test_item_empty)))
+
+  # Test with personlist that exists but has empty array
+  test_item_empty_array <- list(
+    author = list()
+  )
+  expect_true(is.na(.select_surname(test_item_empty_array)))
+
+  # Test with personlist where first element is NULL
+  test_item_null_first <- list(
+    author = list(NULL)
+  )
+  expect_true(is.na(.select_surname(test_item_null_first)))
+
+  # Test with personlist where first element has no family or literal
+  test_item_no_names <- list(
+    author = list(list(given="John"))
+  )
+  expect_true(is.na(.select_surname(test_item_no_names)))
+
+  # Verify it still works for valid cases
+  test_item_valid <- list(
+    author = list(list(family="Smith", given="John"))
+  )
+  expect_equal(.select_surname(test_item_valid), "Smith")
+})
+
 test_that(".select_year works", {
   test_item_1 <- list(item=list(issued="2025-03-10 20:21:47 UTC"))
   test_item_2 <- list(item=list(title="This is the title"))
@@ -89,6 +121,44 @@ test_that(".lapply_filter_internal works", {
   expect_false("created" %in% names(filtered[[1]]))
   expect_false("that_id" %in% names(filtered[[2]]))
   expect_false("object_type" %in% names(filtered[[2]]))
+})
+
+test_that(".filter_internal validates keep parameter type", {
+  test_list <- list(
+    a = 1,
+    this_id = 2,
+    stage = 0,
+    revision = 1
+  )
+
+  # Valid: NULL keep (default)
+  result1 <- expect_no_error(.filter_internal(test_list, keep=NULL))
+  expect_true("a" %in% names(result1))
+  expect_false("this_id" %in% names(result1))
+
+  # Valid: character vector keep
+  result2 <- expect_no_error(.filter_internal(test_list, keep=c("stage")))
+  expect_true("a" %in% names(result2))
+  expect_true("stage" %in% names(result2))
+  expect_false("this_id" %in% names(result2))
+
+  # Invalid: numeric keep
+  expect_error(
+    .filter_internal(test_list, keep=123),
+    regexp = "keep parameter must be a character vector"
+  )
+
+  # Invalid: list keep
+  expect_error(
+    .filter_internal(test_list, keep=list("stage")),
+    regexp = "keep parameter must be a character vector"
+  )
+
+  # Invalid: logical keep
+  expect_error(
+    .filter_internal(test_list, keep=TRUE),
+    regexp = "keep parameter must be a character vector"
+  )
 })
 
 

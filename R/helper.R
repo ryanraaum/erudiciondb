@@ -144,10 +144,26 @@ item_date_columns <- c(
 # here, we are selecting the "best" surname for the citekey
 .select_surname <- function(item_data) {
   personlists <- base::intersect(valid_personlist_types, names(item_data))
+
+  if (length(personlists) == 0) {
+    return(NA)
+  }
+
   plists_order <- match(personlists, valid_personlist_types)
   which_preferred <- which(plists_order == min(plists_order))
   preferred <- personlists[which_preferred]
+
+  # Check if the personlist is empty before accessing [[1]]
+  if (length(item_data[[preferred]]) == 0) {
+    return(NA)
+  }
+
   first_person <- item_data[[preferred]][[1]]
+
+  if (is.null(first_person)) {
+    return(NA)
+  }
+
   if (aidr::this_exists(first_person$family)) { return(first_person$family) }
   if (aidr::this_exists(first_person$literal)) { return(first_person$literal) }
   return(NA)
@@ -202,6 +218,9 @@ item_date_columns <- c(
 }
 
 .filter_internal <- function(l, keep=NULL) {
+  if (!is.null(keep) && !is.character(keep)) {
+    stop("keep parameter must be a character vector")
+  }
   l[!.is_internal(l, keep)]
 }
 
