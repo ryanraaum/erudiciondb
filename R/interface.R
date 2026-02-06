@@ -558,7 +558,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .item_ids_to_biblio_items <- function(connection, item_ids) {
   result_df <- fetched_results <- tibble::tibble()
   # following to avoid check() notes
-  stage <- NULL
+  stage <- revision <- NULL
 
   item_id_in_df <- NULL
   if (is.data.frame(item_ids) && "item_id" %in% names(item_ids)) {
