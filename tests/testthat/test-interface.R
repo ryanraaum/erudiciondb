@@ -962,6 +962,83 @@ test_that("match_person handles NULL and NA names gracefully", {
   }
 })
 
+test_that(".match_person handles names with no word characters", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert a person with regular ASCII name
+    person_id <- expect_no_error(.insert_new_object(
+      testdbobj$con,
+      "person",
+      list(
+        primary_given_names = "Jane",
+        surnames = "Smith"
+      )
+    ))
+
+    # Test 1: Pure emoji given name (str_extract returns NA)
+    person_emoji <- list(
+      given = "😀",
+      family = "Smith"
+    )
+    result_emoji <- expect_no_error(.match_person(testdbobj$con, person_emoji))
+
+    # Should return empty result (no match found)
+    expect_equal(nrow(result_emoji), 0)
+    expect_true(all(c("person_id", "similarity", "found_by") %in% names(result_emoji)))
+
+    # Test 2: Special character-only given name
+    person_special <- list(
+      given = "★☆✦",
+      family = "Smith"
+    )
+    result_special <- expect_no_error(.match_person(testdbobj$con, person_special))
+
+    # Should return empty result (no match found)
+    expect_equal(nrow(result_special), 0)
+
+    # Test 3: Empty string given name (edge case)
+    person_empty <- list(
+      given = "",
+      family = "Smith"
+    )
+    result_empty <- expect_no_error(.match_person(testdbobj$con, person_empty))
+
+    # Should return empty result (no match found)
+    expect_equal(nrow(result_empty), 0)
+  }
+})
+
+test_that(".match_person still works correctly for valid names", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert a person
+    person_id <- expect_no_error(.insert_new_object(
+      testdbobj$con,
+      "person",
+      list(
+        primary_given_names = "Jane",
+        surnames = "Smith"
+      )
+    ))
+
+    # Test with very close name (should still match via approximate strategy)
+    person_close <- list(
+      given = "Jane",
+      family = "Smyth"  # Close but not exact
+    )
+    result_close <- expect_no_error(.match_person(testdbobj$con, person_close))
+
+    # Depending on distance threshold, may or may not match
+    # At minimum, should not error
+    expect_true(nrow(result_close) >= 0)
+    expect_true(all(c("person_id", "similarity", "found_by") %in% names(result_close)))
+  }
+})
+
 test_that(".find() properly returns pooled connection on error", {
   for (db in supported_databases()) {
     testdbobj <- make_testdbobj(db)

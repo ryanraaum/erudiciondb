@@ -509,19 +509,28 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if ("given" %in% pdata_names && "family" %in% pdata_names) {
     # use only first word in ascii given name (initials are not in the primary_given_names column)
     first_given <- stringr::str_extract(pdata$given_ascii, "\\w+")
-    this_person <- persons |>
-      dplyr::mutate(given_distance = .name_distance(first_given, ascii_given_names),
-             family_distance = .name_distance(pdata$family_ascii, ascii_surnames)) |>
-      dplyr::filter(given_distance < 0.05, family_distance < 0.05)
-    if (nrow(this_person) >= 1) {
-      return(
-        this_person |>
-          dplyr::mutate(similarity = 1-mean(c(given_distance, family_distance)), found_by = "approximate_name_match")
-      )
+
+    # Skip this matching strategy if no word characters in given name
+    if (!is.na(first_given)) {
+      this_person <- persons |>
+        dplyr::mutate(given_distance = .name_distance(first_given, ascii_given_names),
+               family_distance = .name_distance(pdata$family_ascii, ascii_surnames)) |>
+        dplyr::filter(given_distance < 0.05, family_distance < 0.05)
+      if (nrow(this_person) >= 1) {
+        return(
+          this_person |>
+            dplyr::mutate(similarity = 1-mean(c(given_distance, family_distance)), found_by = "approximate_name_match")
+        )
+      }
     }
   }
 
-  return(EMPTY_FIND_RESULT)
+  # Return empty result with correct column structure (persons table + similarity + found_by)
+  return(
+    persons |>
+      dplyr::filter(FALSE) |>
+      dplyr::mutate(similarity = numeric(0), found_by = character(0))
+  )
 }
 
 
