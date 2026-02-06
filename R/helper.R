@@ -187,7 +187,7 @@ item_date_columns <- c(
 }
 
 .update_it <- function(this_object, this_variable, this_value) {
-  if (is.na(this_value)) {
+  if (is.null(this_value) || is.na(this_value)) {
     return(this_object[[this_variable]])
   }
   this_value

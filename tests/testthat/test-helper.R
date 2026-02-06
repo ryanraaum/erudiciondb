@@ -191,3 +191,83 @@ test_that(".filter_internal works", {
   expect_false("revision" %in% names(filtered))
   expect_false("created" %in% names(filtered))
 })
+
+# Test .update_it() helper function
+
+test_that(".update_it returns old value when new value is NA", {
+  old_obj <- list(name = "Original", value = 42)
+
+  result <- .update_it(old_obj, "name", NA)
+
+  expect_equal(result, "Original")
+})
+
+test_that(".update_it returns old value when new value is NULL", {
+  old_obj <- list(name = "Original", value = 42)
+
+  result <- .update_it(old_obj, "name", NULL)
+
+  expect_equal(result, "Original")
+})
+
+test_that(".update_it returns new value when value is not NA or NULL", {
+  old_obj <- list(name = "Original", value = 42)
+
+  # Test with string
+  result1 <- .update_it(old_obj, "name", "Updated")
+  expect_equal(result1, "Updated")
+
+  # Test with number
+  result2 <- .update_it(old_obj, "value", 99)
+  expect_equal(result2, 99)
+
+  # Test with FALSE (should not be treated as NA)
+  result3 <- .update_it(old_obj, "value", FALSE)
+  expect_equal(result3, FALSE)
+
+  # Test with 0 (should not be treated as NA)
+  result4 <- .update_it(old_obj, "value", 0)
+  expect_equal(result4, 0)
+
+  # Test with empty string (should not be treated as NA)
+  result5 <- .update_it(old_obj, "name", "")
+  expect_equal(result5, "")
+})
+
+test_that(".update_it works within .revise_object context", {
+  # Integration test to ensure the fix works in actual usage
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Create a person
+    person_id <- expect_no_error(.insert_new_object(
+      testcon,
+      "person",
+      list(
+        primary_given_names = "John",
+        surnames = "Doe"
+      )
+    ))
+
+    # Get the person object
+    person_obj <- .retrieve(testcon, "person", person_id)[[1]]
+
+    # Revise with NULL (should keep old value via .update_it)
+    expect_no_error(.update_object(testcon, person_obj, surnames = NULL))
+    person_after_null <- .retrieve(testcon, "person", person_id)[[1]]
+    expect_equal(person_after_null$surnames, "Doe")  # Unchanged
+
+    # Revise with NA (should keep old value via .update_it)
+    person_obj <- .retrieve(testcon, "person", person_id)[[1]]
+    expect_no_error(.update_object(testcon, person_obj, surnames = NA))
+    person_after_na <- .retrieve(testcon, "person", person_id)[[1]]
+    expect_equal(person_after_na$surnames, "Doe")  # Still unchanged
+
+    # Revise with actual value (should update)
+    person_obj <- .retrieve(testcon, "person", person_id)[[1]]
+    expect_no_error(.update_object(testcon, person_obj, surnames = "Smith"))
+    person_after_update <- .retrieve(testcon, "person", person_id)[[1]]
+    expect_equal(person_after_update$surnames, "Smith")  # Updated
+  }
+})
