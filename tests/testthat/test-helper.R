@@ -271,3 +271,26 @@ test_that(".update_it works within .revise_object context", {
     expect_equal(person_after_update$surnames, "Smith")  # Updated
   }
 })
+
+# Test .name_parts() helper function
+
+test_that(".name_parts splits names correctly", {
+  # Basic functionality
+  expect_equal(.name_parts("John Doe"), c("John", "Doe"))
+  expect_equal(.name_parts("Mary Jane Smith"), c("Mary", "Jane", "Smith"))
+  expect_equal(.name_parts("Madonna"), c("Madonna"))
+
+  # Punctuation and special characters
+  expect_equal(.name_parts("Mary-Jane Smith"), c("Mary", "Jane", "Smith"))
+  expect_equal(.name_parts("O'Brien"), c("O", "Brien"))
+  expect_equal(.name_parts("J.R.R. Tolkien"), c("J", "R", "R", "Tolkien"))
+  expect_equal(.name_parts("John  Doe"), c("John", "Doe"))  # Multiple spaces
+
+  # Edge cases
+  expect_equal(.name_parts(""), character(0))
+  expect_equal(.name_parts("---"), character(0))
+  expect_equal(.name_parts(" John Doe "), c("John", "Doe"))
+
+  # International names (accented characters are word characters)
+  expect_equal(.name_parts("José García"), c("José", "García"))
+})
