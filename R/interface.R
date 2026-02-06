@@ -564,7 +564,9 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if (is.data.frame(item_ids) && "item_id" %in% names(item_ids)) {
     item_id_in_df <- item_ids[,"item_id"]
   } else if (is.character(item_ids) || uuid::is.UUID(item_ids)) {
-    item_id_in_df <- tibble::tibble(item_id = uuid::as.UUID(item_ids))
+    # Keep as character for database compatibility with copy=TRUE
+    # Database stores UUIDs as VARCHAR anyway
+    item_id_in_df <- tibble::tibble(item_id = as.character(item_ids))
   } else {
     return(result_df)
   }
@@ -642,11 +644,20 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 .biblio_items_to_csl_list <- function(bibitems) {
-  # first, convert dates to character
+  # Handle empty input early
+  if (nrow(bibitems) == 0) { return(list()) }
+
+  # Convert date columns to character, only if they exist
   # - because toJSON otherwise converts dates to seconds since 1970,
   #    which pandoc bibliography processing does not like
-  items <- bibitems |>
-    dplyr::mutate(dplyr::across(dplyr::all_of(item_date_columns), as.character))
+  date_cols_present <- intersect(item_date_columns, names(bibitems))
+  if (length(date_cols_present) > 0) {
+    items <- bibitems |>
+      dplyr::mutate(dplyr::across(dplyr::all_of(date_cols_present), as.character))
+  } else {
+    items <- bibitems
+  }
+
   items <- apply(items, 1, as.list)
   if (length(items) == 0) { return(list()) }
   names(items) <- sapply(items, '[[', "item_id")
@@ -697,12 +708,38 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if (length(plists) == 0) { return(list_item) }
 
   for (this_type in plists) {
-    persons <- list_item[[this_type]] |>
-      dplyr::rename( "dropping-particle" = "dropping_particle",
-                     "non-dropping-particle" = "non_dropping_particle",
-                     "comma-suffix" = "comma_suffix",
-                     "static-ordering" = "static_ordering",
-                     "parse-names" = "parse_names")
+    # Get the person data - when extracted from apply(tibble, 1, as.list),
+    # list-columns become tibbles directly (not wrapped in a list)
+    persons <- list_item[[this_type]]
+
+    # Handle NULL or non-dataframe cases (skip if no person data)
+    if (is.null(persons)) {
+      next
+    }
+    if (!is.data.frame(persons)) {
+      next
+    }
+    if (nrow(persons) == 0) {
+      next
+    }
+
+    # Only rename optional CSL columns that exist
+    if ("dropping_particle" %in% names(persons)) {
+      persons <- persons |> dplyr::rename("dropping-particle" = "dropping_particle")
+    }
+    if ("non_dropping_particle" %in% names(persons)) {
+      persons <- persons |> dplyr::rename("non-dropping-particle" = "non_dropping_particle")
+    }
+    if ("comma_suffix" %in% names(persons)) {
+      persons <- persons |> dplyr::rename("comma-suffix" = "comma_suffix")
+    }
+    if ("static_ordering" %in% names(persons)) {
+      persons <- persons |> dplyr::rename("static-ordering" = "static_ordering")
+    }
+    if ("parse_names" %in% names(persons)) {
+      persons <- persons |> dplyr::rename("parse-names" = "parse_names")
+    }
+
     list_item[[this_type]] <- persons |>
       dplyr::arrange(position) |>
       apply(1, as.list) |>
