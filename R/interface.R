@@ -252,7 +252,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 .find_item_by_title <- function(connection, title) {
   result_df <- EMPTY_FIND_RESULT
 
-  if (aidr::this_exists(title)) {
+  if (aidr::this_exists(title) && nchar(trimws(title)) > 0) {
     search_title_nchar <- nchar(title)
     if (is_sqlite_connection(connection)) {
       search_title = title

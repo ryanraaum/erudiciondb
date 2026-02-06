@@ -290,6 +290,48 @@ test_that("SQLite title search returns found_by metadata", {
   expect_equal(found2$found_by[1], "title")
 })
 
+test_that(".find_item_by_title handles empty string gracefully", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Insert a test item
+    proto_new_item <- list(
+      title = "Test Article",
+      container_title = "Test Journal"
+    )
+    new_item <- .new_object(testcon, "item", proto_new_item)
+    new_item_id <- .insert_one(testcon, new_item)
+
+    # Search with empty string should return no results
+    found_empty <- .find_item_by_title(testcon, title = "")
+    expect_equal(nrow(found_empty), 0)
+
+    # Search with whitespace-only string should also return no results
+    found_whitespace <- .find_item_by_title(testcon, title = "   ")
+    expect_equal(nrow(found_whitespace), 0)
+
+    # Verify valid search still works
+    found_valid <- .find_item_by_title(testcon, title = "Test")
+    expect_true(nrow(found_valid) > 0)
+  }
+})
+
+test_that(".find_item_by_title handles NULL and NA", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Search with NULL should return no results
+    found_null <- .find_item_by_title(testcon, title = NULL)
+    expect_equal(nrow(found_null), 0)
+
+    # Search with NA should return no results
+    found_na <- .find_item_by_title(testcon, title = NA)
+    expect_equal(nrow(found_na), 0)
+  }
+})
+
 
 test_that("item can be found by person", {
   for (db in supported_databases()) {
