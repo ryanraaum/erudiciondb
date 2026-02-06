@@ -294,3 +294,154 @@ test_that(".name_parts splits names correctly", {
   # International names (accented characters are word characters)
   expect_equal(.name_parts("José García"), c("José", "García"))
 })
+
+# .shortest_distance() --------------------------------------------------------
+
+test_that(".shortest_distance calculates name similarity correctly", {
+  # Perfect matches (distance = 0)
+  expect_equal(.shortest_distance(c("John", "Smith"), c("John", "Smith")), 0)
+  expect_equal(.shortest_distance(c("García"), c("García")), 0)
+
+  # Single-part names (uses min of all comparisons)
+  expect_equal(.shortest_distance(c("Smith"), c("John", "Smith")), 0)
+  expect_equal(.shortest_distance(c("Smith"), c("John", "Smith", "Jr")), 0)
+
+  # Equal-length multi-part names (direct comparison)
+  expect_equal(.shortest_distance(c("John", "Smith"), c("John", "Smith")), 0)
+  expect_equal(.shortest_distance(c("Mary", "Jane"), c("Mary", "Jane")), 0)
+
+  # Sliding window - target longer than found (finds best alignment)
+  result <- .shortest_distance(c("John", "Michael"),
+                               c("John", "Michael", "Robert", "Smith"))
+  expect_equal(result, 0)
+
+  result <- .shortest_distance(c("Robert", "Smith"),
+                               c("John", "Michael", "Robert", "Smith"))
+  expect_equal(result, 0)
+
+  # Sliding window - found longer than target (finds best alignment)
+  result <- .shortest_distance(c("John", "Michael", "Robert", "Smith"),
+                               c("Robert", "Smith"))
+  expect_equal(result, 0)
+
+  result <- .shortest_distance(c("John", "Michael", "Robert", "Smith"),
+                               c("John", "Michael"))
+  expect_equal(result, 0)
+
+  # Initial filtering - single chars removed before comparison
+  expect_equal(.shortest_distance(c("J", "Smith"), c("John", "Smith")), 0)
+
+  # After filtering "A", we get "John Smith" vs "John Andrew Smith"
+  # Sliding window finds best match, but "Smith" doesn't match "Andrew"
+  result <- .shortest_distance(c("John", "A", "Smith"),
+                               c("John", "Andrew", "Smith"))
+  expect_true(result > 0.2 && result < 0.3)  # Best alignment still has mismatch
+
+  expect_equal(.shortest_distance(c("J", "R", "R", "Tolkien"),
+               c("J", "Tolkien")), 0)
+})
+
+test_that(".shortest_distance handles edge cases correctly", {
+  # Empty inputs return 1 (maximum distance)
+  expect_equal(.shortest_distance(character(0), c("John", "Smith")), 1)
+  expect_equal(.shortest_distance(c("John"), character(0)), 1)
+  expect_equal(.shortest_distance(character(0), character(0)), 1)
+
+  # All single-character parts filtered out (becomes empty, returns 1)
+  expect_equal(.shortest_distance(c("J", "A"), c("John", "Adams")), 1)
+  expect_equal(.shortest_distance(c("J", "R", "R"), c("T", "K", "N")), 1)
+  expect_equal(.shortest_distance(c("John", "Adams"), c("J", "A")), 1)
+
+  # Mixed initials and full names
+  expect_equal(.shortest_distance(c("J", "R", "R", "Tolkien"), c("J", "Tolkien")), 0)
+  expect_equal(.shortest_distance(c("J", "Tolkien"), c("J", "R", "R", "Tolkien")), 0)
+
+  # International characters (accents create non-zero distance)
+  jose_distance <- .shortest_distance(c("José"), c("Jose"))
+  expect_true(jose_distance > 0)
+  expect_true(jose_distance < 0.2)  # Should be close but not identical
+
+  # Common name variations have expected distances
+  smith_smyth <- .shortest_distance(c("Smith"), c("Smyth"))
+  expect_true(smith_smyth > 0.1 && smith_smyth < 0.15)  # ~0.133
+
+  macdonald_mcdonald <- .shortest_distance(c("MacDonald"), c("McDonald"))
+  expect_true(macdonald_mcdonald > 0 && macdonald_mcdonald < 0.05)  # ~0.037
+})
+
+# .name_distance() ------------------------------------------------------------
+
+test_that(".name_distance works with vectorized targets", {
+  # Single target (returns vector of length 1)
+  expect_equal(.name_distance("John Smith", c("John Smith")), 0)
+  expect_length(.name_distance("John Smith", c("John Smith")), 1)
+
+  # Multiple targets (returns parallel vector)
+  result <- .name_distance("John Smith", c("John Smith", "John Smyth", "Jane Smith"))
+  expect_length(result, 3)
+  expect_equal(result[1], 0)  # Exact match
+  expect_true(result[2] > 0 && result[2] < 0.2)  # Close match (Smyth)
+  expect_true(result[3] > 0.1)  # Different first name (Jane)
+
+  # Integration with .name_parts() - should give same result as calling directly
+  expect_equal(.name_distance("John Smith", c("John Smith")),
+               .shortest_distance(.name_parts("John Smith"),
+                                .name_parts("John Smith")))
+  expect_equal(.name_distance("Mary Jane", c("Mary Jane", "Jane Mary")),
+               c(.shortest_distance(.name_parts("Mary Jane"), .name_parts("Mary Jane")),
+                 .shortest_distance(.name_parts("Mary Jane"), .name_parts("Jane Mary"))))
+
+  # Handles punctuation (via .name_parts)
+  result <- .name_distance("O'Brien", c("O'Brien", "Brien"))
+  expect_equal(result[1], 0)  # Exact after splitting
+  expect_equal(result[2], 0)  # Just "Brien" matches "Brien" part
+
+  # Threshold behavior for .match_person (< 0.05)
+  # Jon Smith vs John Smith: average of Jon~John (0.083) and Smith~Smith (0)
+  # = 0.042, which is BELOW 0.05 threshold, so should match
+  result <- .name_distance("Jon Smith", c("John Smith"))
+  expect_true(result[1] < 0.05)
+  expect_true(result[1] > 0)  # But not exact match
+
+  # MacDonald vs McDonald is ~0.037, so SHOULD match
+  result <- .name_distance("MacDonald", c("McDonald"))
+  expect_true(result[1] < 0.05)
+})
+
+test_that(".name_distance handles edge cases correctly", {
+  # Empty found name (returns 1 after .name_parts returns character(0))
+  expect_equal(.name_distance("", c("John Smith")), 1)
+  expect_equal(.name_distance("   ", c("John Smith")), 1)
+
+  # Empty target name (returns 1)
+  expect_equal(.name_distance("John Smith", c("")), 1)
+
+  # Multiple targets with mixed empty/valid
+  result <- .name_distance("John Smith", c("", "John Smith", "   "))
+  expect_equal(result, c(1, 0, 1))
+
+  # Initials-only names filtered to empty (returns 1)
+  expect_equal(.name_distance("J A", c("John Adams")), 1)
+  expect_equal(.name_distance("John Adams", c("J A")), 1)
+  expect_equal(.name_distance("J R R", c("J K R")), 1)
+
+  # Vectorization preserves order
+  targets <- c("Alice", "Bob", "Charlie", "David")
+  result <- .name_distance("Bob", targets)
+  expect_length(result, 4)
+  expect_equal(result[2], 0)  # Bob matches Bob (index 2)
+  expect_true(all(result[-2] > 0))  # Others don't match
+
+  # More complex order preservation
+  targets <- c("John Smith", "Jane Smith", "John Smyth", "Bob Jones")
+  result <- .name_distance("John Smith", targets)
+  expect_length(result, 4)
+  expect_equal(result[1], 0)  # Exact match at index 1
+  expect_true(result[2] > result[3])  # Jane Smith farther than John Smyth
+  expect_true(result[4] > result[1])  # Bob Jones farther than exact match
+
+  # International names with accents
+  result <- .name_distance("José García", c("José García", "Jose Garcia"))
+  expect_equal(result[1], 0)  # Exact match
+  expect_true(result[2] > 0 && result[2] < 0.3)  # Accents create distance
+})
