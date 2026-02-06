@@ -77,7 +77,7 @@ AUGMENTORS[["person_identifier"]] <- .augment_person_identifier
     if (is.null(citekey_surname)) { citekey_surname <- creator$literal }
     if (is.null(citekey_surname)) { stop("No viable creator name for citekey") }
 
-    if (!aidr::this_exists(new_item$issued) && lubridate::is.Date(new_item$issued)) {
+    if (!aidr::this_exists(new_item$issued) || !lubridate::is.Date(new_item$issued)) {
       stop("No viable publication date")
     }
     citekey_year <- lubridate::year(new_item$issued)

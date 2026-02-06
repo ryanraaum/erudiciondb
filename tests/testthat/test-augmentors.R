@@ -80,3 +80,89 @@ test_that(".augment_item_plus works", {
   expect_equal(augmented_institution$citation_key, "InternationalHapMapConsortium2015Genbank")
 })
 
+test_that(".augment_item_plus raises error when issued date is missing", {
+  item_no_date <- list(
+    citation_key = NA,
+    title = "GenBank"
+    # issued is missing
+  )
+  creator <- list(family = "Clark", given = "Karen")
+
+  expect_error(
+    .augment_item_plus(item_no_date, creator),
+    "No viable publication date",
+    fixed = TRUE
+  )
+})
+
+test_that(".augment_item_plus raises error when issued is NA", {
+  item_na_date <- list(
+    citation_key = NA,
+    issued = NA,
+    title = "GenBank"
+  )
+  creator <- list(family = "Clark", given = "Karen")
+
+  expect_error(
+    .augment_item_plus(item_na_date, creator),
+    "No viable publication date",
+    fixed = TRUE
+  )
+})
+
+test_that(".augment_item_plus raises error when issued is NULL", {
+  item_null_date <- list(
+    citation_key = NA,
+    issued = NULL,
+    title = "GenBank"
+  )
+  creator <- list(family = "Clark", given = "Karen")
+
+  expect_error(
+    .augment_item_plus(item_null_date, creator),
+    "No viable publication date",
+    fixed = TRUE
+  )
+})
+
+test_that(".augment_item_plus raises error when issued is not a Date object", {
+  # Test character string
+  item_string_date <- list(
+    citation_key = NA,
+    issued = "2024-01-01",
+    title = "GenBank"
+  )
+  creator <- list(family = "Clark", given = "Karen")
+
+  expect_error(
+    .augment_item_plus(item_string_date, creator),
+    "No viable publication date",
+    fixed = TRUE
+  )
+
+  # Test numeric
+  item_numeric_date <- list(
+    citation_key = NA,
+    issued = 20240101,
+    title = "GenBank"
+  )
+
+  expect_error(
+    .augment_item_plus(item_numeric_date, creator),
+    "No viable publication date",
+    fixed = TRUE
+  )
+})
+
+test_that(".augment_item_plus works with valid Date object", {
+  item_valid <- list(
+    citation_key = NA,
+    issued = as.Date("2015-11-20"),
+    title = "GenBank"
+  )
+  creator <- list(family = "Clark", given = "Karen")
+
+  result <- expect_no_error(.augment_item_plus(item_valid, creator))
+  expect_equal(result$citation_key, "Clark2015Genbank")
+})
+
