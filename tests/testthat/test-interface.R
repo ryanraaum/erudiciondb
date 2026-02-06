@@ -1609,7 +1609,7 @@ test_that("bibliography functions exclude inactive revisions", {
     expect_equal(nrow(bibitems), 1)
     expect_equal(bibitems$title[1], "Updated Title")
     expect_equal(bibitems$revision[1], 2)
-    expect_equal(bibitems$stage[1], "0")  # active
+    expect_equal(bibitems$stage[1], 0)  # active (integer from database)
   }
 })
 

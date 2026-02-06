@@ -576,7 +576,9 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     items_tbl <- dplyr::tbl(checked_out_con, "items") |> dplyr::filter(stage == 0)
     all_items <- items_tbl |>
       dplyr::right_join(item_id_in_df, by="item_id", copy=TRUE) |>
-      dplyr::collect()
+      dplyr::collect() |>
+      # Filter out non-existent items (right_join creates rows with NA revision)
+      dplyr::filter(!is.na(revision))
   }, finally = {
     pool::poolReturn(checked_out_con)
   })
@@ -603,42 +605,50 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       personlist_data <- personlists_tbl |>
         dplyr::right_join(just_item_ids, by="item_id", copy=TRUE) |>
         dplyr::select(personlist_id, item_id, personlist_type) |>
-        dplyr::collect()
+        dplyr::collect() |>
+        # Filter out rows with NA personlist_id (items with no personlists)
+        dplyr::filter(!is.na(personlist_id))
     }, finally = {
       pool::poolReturn(checked_out_con)
     })
+    # Check for empty personlist data early
+    if (nrow(personlist_data) == 0) {
+      # No personlists for these items - skip processing
+      result_df <- items
+      # No need to add person columns
+    } else {
+      personlists_grouped_by_type <- personlist_data |>
+        dplyr::group_by(personlist_type)
 
-    personlists_grouped_by_type <- personlist_data |>
-      dplyr::group_by(personlist_type)
+      personlists_by_type <- personlists_grouped_by_type |> dplyr::group_split(.keep=FALSE)
+      names(personlists_by_type) <- (personlists_grouped_by_type |> dplyr::group_keys())$personlist_type
 
-    personlists_by_type <- personlists_grouped_by_type |> dplyr::group_split(.keep=FALSE)
-    names(personlists_by_type) <- (personlists_grouped_by_type |> dplyr::group_keys())$personlist_type
+      item_persons_by_type <- vector("list", length(personlists_by_type))
+      names(item_persons_by_type) <- names(personlists_by_type)
 
-    item_persons_by_type <- vector("list", length(personlists_by_type))
-    names(item_persons_by_type) <- names(personlists_by_type)
+      for (ptype in names(personlists_by_type)) {
+        checked_out_con <- pool::poolCheckout(connection)
+        tryCatch({
+          this_item_persons_tbl <- dplyr::tbl(checked_out_con, "item_persons") |> dplyr::filter(stage == 0)
+          these_item_persons <- this_item_persons_tbl |>
+            dplyr::right_join(personlists_by_type[[ptype]], by="personlist_id", copy=TRUE) |>
+            dplyr::collect() |>
+            dplyr::group_by(item_id)
+          item_persons_by_type[[ptype]] <- tibble::tibble(
+            item_id = (these_item_persons |> dplyr::group_keys())$item_id,
+            {{ptype}} := these_item_persons |> dplyr::group_split()
+          )
+        }, finally = {
+          pool::poolReturn(checked_out_con)
+        })
+      }
 
-    for (ptype in names(personlists_by_type)) {
-      checked_out_con <- pool::poolCheckout(connection)
-      tryCatch({
-        this_item_persons_tbl <- dplyr::tbl(checked_out_con, "item_persons") |> dplyr::filter(stage == 0)
-        these_item_persons <- this_item_persons_tbl |>
-          dplyr::right_join(personlists_by_type[[ptype]], by="personlist_id", copy=TRUE) |>
-          dplyr::collect() |>
-          dplyr::group_by(item_id)
-        item_persons_by_type[[ptype]] <- tibble::tibble(
-          item_id = (these_item_persons |> dplyr::group_keys())$item_id,
-          {{ptype}} := these_item_persons |> dplyr::group_split()
-        )
-      }, finally = {
-        pool::poolReturn(checked_out_con)
-      })
+      combined_item_persons_by_personlist_type <- purrr::reduce(item_persons_by_type, dplyr::full_join, by = 'item_id')
+
+      result_df <- items |>
+        dplyr::left_join(combined_item_persons_by_personlist_type, by="item_id")
+
     }
-
-    combined_item_persons_by_personlist_type <- purrr::reduce(item_persons_by_type, dplyr::full_join, by = 'item_id')
-
-    result_df <- items |>
-      dplyr::left_join(combined_item_persons_by_personlist_type, by="item_id")
-
   }
   result_df
 }
@@ -708,14 +718,24 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   if (length(plists) == 0) { return(list_item) }
 
   for (this_type in plists) {
-    # Get the person data - when extracted from apply(tibble, 1, as.list),
-    # list-columns become tibbles directly (not wrapped in a list)
+    # Get the person data
     persons <- list_item[[this_type]]
 
-    # Handle NULL or non-dataframe cases (skip if no person data)
+    # Handle NULL cases
     if (is.null(persons)) {
       next
     }
+
+    # If persons is a list (list-column structure from as.list()),
+    # extract the first element which should be the dataframe
+    if (is.list(persons) && !is.data.frame(persons)) {
+      if (length(persons) == 0) {
+        next
+      }
+      persons <- persons[[1]]
+    }
+
+    # Now check if it's a dataframe
     if (!is.data.frame(persons)) {
       next
     }
@@ -740,9 +760,15 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
       persons <- persons |> dplyr::rename("parse-names" = "parse_names")
     }
 
-    list_item[[this_type]] <- persons |>
-      dplyr::arrange(position) |>
-      apply(1, as.list) |>
+    # Convert each row to a list properly
+    # We need to preserve the data structure without matrix coercion
+    persons_arranged <- persons |> dplyr::arrange(position)
+    person_list <- vector("list", nrow(persons_arranged))
+    for (i in seq_len(nrow(persons_arranged))) {
+      person_list[[i]] <- as.list(persons_arranged[i, ])
+    }
+
+    list_item[[this_type]] <- person_list |>
       purrr::map(.filter_na) |>
       purrr::map(\(x) .filter_internal(x, keep="person_id"))
 
