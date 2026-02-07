@@ -752,3 +752,88 @@ test_that(".is_internal handles fields that contain but don't end with _id", {
   expect_false(result[4])  # item_identifier (no _id at end)
   expect_true(result[5])   # stage (special field)
 })
+
+# .filter_empty() tests -------------------------------------------------------
+# NOTE: .filter_empty() appears to be unused in the codebase (grep search found no usage)
+# These tests document current behavior - function is a candidate for removal
+
+test_that(".filter_empty removes empty elements from list elements", {
+  # Basic case: list with some empty and non-empty vectors
+  input <- list(
+    a = c(1, 2, 3),
+    b = character(0),
+    c = c("x", "y")
+  )
+
+  result <- .filter_empty(input)
+
+  # Should keep non-empty vectors
+  expect_equal(result$a, c(1, 2, 3))
+  expect_equal(result$c, c("x", "y"))
+
+  # Should filter out empty vector from b
+  expect_length(result$b, 0)
+})
+
+test_that(".filter_empty handles nested lists", {
+  # Nested list structure
+  input <- list(
+    outer1 = list(
+      inner1 = c(1, 2),
+      inner2 = character(0),
+      inner3 = c(3)
+    ),
+    outer2 = list(
+      inner4 = numeric(0)
+    )
+  )
+
+  result <- .filter_empty(input)
+
+  # Check that it operates on top-level list elements
+  expect_true(is.list(result$outer1))
+  expect_true(is.list(result$outer2))
+
+  # Each element should have been processed by lapply
+  expect_length(result$outer1, 3)  # Still has 3 elements
+  expect_length(result$outer2, 1)  # Still has 1 element
+})
+
+test_that(".filter_empty handles empty list input", {
+  result <- .filter_empty(list())
+
+  expect_true(is.list(result))
+  expect_length(result, 0)
+})
+
+test_that(".filter_empty handles list with all empty elements", {
+  input <- list(
+    a = character(0),
+    b = numeric(0),
+    c = integer(0)
+  )
+
+  result <- .filter_empty(input)
+
+  # All elements still present but filtered
+  expect_length(result, 3)
+  expect_length(result$a, 0)
+  expect_length(result$b, 0)
+  expect_length(result$c, 0)
+})
+
+test_that(".filter_empty preserves NULL elements", {
+  # NULL has length 0, so should be filtered
+  input <- list(
+    a = c(1, 2),
+    b = NULL,
+    c = c(3)
+  )
+
+  result <- .filter_empty(input)
+
+  expect_equal(result$a, c(1, 2))
+  expect_equal(result$c, c(3))
+  # NULL should be filtered (length(NULL) == 0)
+  expect_null(result$b)
+})
