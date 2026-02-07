@@ -38,6 +38,155 @@ test_that(".next_revision throws error for non-existent object", {
   }
 })
 
+test_that(".next_revision returns correct next revision number", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Insert first revision of an item
+    proto_item <- list(title="Test Item", volume=1)
+    item <- .new_object(testcon, "item", proto_item)
+    item_id <- .insert_one(testcon, item)
+
+    # After revision 1, next should be 2
+    expect_equal(.next_revision(testcon, "item", item_id), 2)
+
+    # Insert revision 2 by updating
+    item_rev1 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev1, volume=2)
+
+    # After revision 2, next should be 3
+    expect_equal(.next_revision(testcon, "item", item_id), 3)
+
+    # Insert revision 3 by updating again
+    item_rev2 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev2, volume=3)
+
+    # After revision 3, next should be 4
+    expect_equal(.next_revision(testcon, "item", item_id), 4)
+
+    # Insert revision 4
+    item_rev3 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev3, volume=4)
+
+    # After revision 4, next should be 5
+    expect_equal(.next_revision(testcon, "item", item_id), 5)
+  }
+})
+
+test_that(".next_revision works for all object types", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Test with person
+    proto_person <- list(surnames="Smith", primary_given_names="John")
+    person <- .new_object(testcon, "person", proto_person)
+    person_id <- .insert_one(testcon, person)
+    expect_equal(.next_revision(testcon, "person", person_id), 2)
+
+    # Test with item
+    proto_item <- list(title="Article")
+    item <- .new_object(testcon, "item", proto_item)
+    item_id <- .insert_one(testcon, item)
+    expect_equal(.next_revision(testcon, "item", item_id), 2)
+
+    # Test with personlist
+    proto_personlist <- list(item_id=item_id, personlist_type="author")
+    personlist <- .new_object(testcon, "personlist", proto_personlist)
+    personlist_id <- .insert_one(testcon, personlist)
+    expect_equal(.next_revision(testcon, "personlist", personlist_id), 2)
+
+    # Test with item_person
+    proto_item_person <- list(
+      personlist_id=personlist_id,
+      person_id=person_id,
+      family="Smith",
+      given="John"
+    )
+    item_person <- .new_object(testcon, "item_person", proto_item_person)
+    item_person_id <- .insert_one(testcon, item_person)
+    expect_equal(.next_revision(testcon, "item_person", item_person_id), 2)
+
+    # Test with person_identifier
+    proto_identifier <- list(
+      person_id=person_id,
+      id_type="orcid",
+      id_value="0000-0001-2345-6789"
+    )
+    identifier <- .new_object(testcon, "person_identifier", proto_identifier)
+    identifier_id <- .insert_one(testcon, identifier)
+    expect_equal(.next_revision(testcon, "person_identifier", identifier_id), 2)
+  }
+})
+
+test_that(".next_revision increments correctly after multiple updates", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Create initial person
+    proto_person <- list(surnames="Original", primary_given_names="Test")
+    person <- .new_object(testcon, "person", proto_person)
+    person_id <- .insert_one(testcon, person)
+
+    # Track expected next revision
+    expected_next <- 2
+    expect_equal(.next_revision(testcon, "person", person_id), expected_next)
+
+    # Perform 5 updates and verify next revision increments each time
+    for (i in 1:5) {
+      person_current <- .retrieve(testcon, "person", person_id)[[1]]
+      .update_object(testcon, person_current, surnames=paste0("Update", i))
+      expected_next <- expected_next + 1
+      expect_equal(.next_revision(testcon, "person", person_id), expected_next)
+    }
+
+    # After 1 initial insert + 5 updates, we have revisions 1-6
+    # So next should be 7
+    expect_equal(.next_revision(testcon, "person", person_id), 7)
+  }
+})
+
+test_that(".next_revision works with both active and inactive revisions", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Create item and make multiple revisions
+    proto_item <- list(title="Version 1")
+    item <- .new_object(testcon, "item", proto_item)
+    item_id <- .insert_one(testcon, item)
+
+    # Create revision 2 (revision 1 becomes inactive)
+    item_rev1 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev1, title="Version 2")
+
+    # Create revision 3 (revision 2 becomes inactive)
+    item_rev2 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev2, title="Version 3")
+
+    # Now we have:
+    # - Revision 1 (stage=-1, inactive)
+    # - Revision 2 (stage=-1, inactive)
+    # - Revision 3 (stage=0, active)
+
+    # .next_revision should look at ALL revisions (not just active)
+    # So next should be max(1,2,3) + 1 = 4
+    expect_equal(.next_revision(testcon, "item", item_id), 4)
+
+    # Verify by checking all revisions exist
+    all_revs <- .retrieve(testcon, "item", item_id, stage=-1, revision="all", as_list=FALSE)
+    expect_equal(nrow(all_revs), 2)  # 2 inactive revisions
+
+    active_rev <- .retrieve(testcon, "item", item_id, stage=0, revision="all", as_list=FALSE)
+    expect_equal(nrow(active_rev), 1)  # 1 active revision
+
+    # Total of 3 revisions, so next is 4
+    expect_equal(.next_revision(testcon, "item", item_id), 4)
+  }
+})
+
 test_that(".destage_one properly destages object in database", {
   for (db in supported_databases()) {
     testcon <- make_testcon(db)
