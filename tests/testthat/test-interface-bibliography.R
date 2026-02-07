@@ -359,28 +359,29 @@ test_that(".item_persons_to_biblio_persons handles empty list", {
 })
 
 test_that(".item_persons_to_biblio_persons preserves all CSL person fields", {
-  # Only test SQLite to avoid DuckDB type conversion issues in test setup
-  testdbobj <- make_testdbobj("sqlite")
-  expect_no_error(edb_create_tables(testdbobj$con))
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
 
-  # Create item with all CSL person fields
-  item_id <- testdbobj$insert_new_object("item", list(
-    item = list(title="Test Article"),
-    author = list(
-      list(family="von Neumann", given="John", suffix="Jr.", dropping_particle="von")
-    )
-  ))
+    # Create item with all CSL person fields
+    item_id <- testdbobj$insert_new_object("item", list(
+      item = list(title="Test Article"),
+      author = list(
+        list(family="von Neumann", given="John", suffix="Jr.", dropping_particle="von")
+      )
+    ))
 
-  # Get the bibitems
-  bibitems <- .item_ids_to_biblio_items(testdbobj$con, item_id)
+    # Get the bibitems
+    bibitems <- .item_ids_to_biblio_items(testdbobj$con, item_id)
 
-  # Process through the function
-  result <- .item_persons_to_biblio_persons(as.list(bibitems[1,]))
+    # Process through the function
+    result <- .item_persons_to_biblio_persons(as.list(bibitems[1,]))
 
-  expect_equal(result$author[[1]]$family, "von Neumann")
-  expect_equal(result$author[[1]]$given, "John")
-  expect_equal(result$author[[1]]$suffix, "Jr.")
-  expect_equal(result$author[[1]]$`dropping-particle`, "von")
+    expect_equal(result$author[[1]]$family, "von Neumann")
+    expect_equal(result$author[[1]]$given, "John")
+    expect_equal(result$author[[1]]$suffix, "Jr.")
+    expect_equal(result$author[[1]]$`dropping-particle`, "von")
+  }
 })
 
 # Test 5: .csl_list_to_json() comprehensive testing
@@ -553,26 +554,27 @@ test_that(".items_to_biblio_items correctly handles items with multiple personli
 # Test 8: Items with no personlists
 
 test_that("bibliography functions handle items with no creators", {
-  # Only test SQLite - DuckDB has issues with empty list columns
-  testdbobj <- make_testdbobj("sqlite")
-  expect_no_error(edb_create_tables(testdbobj$con))
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
 
-  # Create item with no personlists using insert_new_object which doesn't require personlists
-  item_id <- testdbobj$insert_new_object("item", list(
-    item = list(
-      title="Anonymous Work",
-      issued=as.Date("20200101", "%Y%m%d")
+    # Create item with no personlists using insert_new_object which doesn't require personlists
+    item_id <- testdbobj$insert_new_object("item", list(
+      item = list(
+        title="Anonymous Work",
+        issued=as.Date("20200101", "%Y%m%d")
+      )
+    ))
+
+    # Should handle gracefully
+    bibitems <- expect_no_error(
+      .item_ids_to_biblio_items(testdbobj$con, item_id)
     )
-  ))
 
-  # Should handle gracefully
-  bibitems <- expect_no_error(
-    .item_ids_to_biblio_items(testdbobj$con, item_id)
-  )
-
-  expect_equal(nrow(bibitems), 1)
-  expect_equal(bibitems$title[1], "Anonymous Work")
-  # Should not have author/editor/etc columns or they should be empty
+    expect_equal(nrow(bibitems), 1)
+    expect_equal(bibitems$title[1], "Anonymous Work")
+    # Should not have author/editor/etc columns or they should be empty
+  }
 })
 
 # Test 9: Non-ASCII characters
