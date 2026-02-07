@@ -243,3 +243,201 @@ test_that(".update_object maintains only one active revision", {
     expect_equal(old_revisions$volume, "1")
   }
 })
+
+
+# Tests for .make_revision_filter() -------------------------------------------
+
+test_that(".make_revision_filter creates correct filter function for 'max' mode", {
+  # .make_revision_filter is a factory that returns filter functions
+  # Test that "max" mode creates a function that gets highest revision
+
+  filter_fn <- .make_revision_filter("max")
+  expect_true(is.function(filter_fn))
+
+  # Create test data frame with multiple revisions
+  test_data <- tibble::tibble(
+    item_id = rep("test-id", 3),
+    revision = c(1, 2, 3),
+    title = c("Rev 1", "Rev 2", "Rev 3")
+  )
+
+  # Apply the filter
+  result <- filter_fn(test_data)
+
+  # Should return only the highest revision
+  expect_equal(nrow(result), 1)
+  expect_equal(result$revision, 3)
+  expect_equal(result$title, "Rev 3")
+})
+
+test_that(".make_revision_filter creates correct filter function for 'all' mode", {
+  filter_fn <- .make_revision_filter("all")
+  expect_true(is.function(filter_fn))
+
+  # Create test data frame with multiple revisions
+  test_data <- tibble::tibble(
+    item_id = rep("test-id", 3),
+    revision = c(1, 2, 3),
+    title = c("Rev 1", "Rev 2", "Rev 3")
+  )
+
+  # Apply the filter
+  result <- filter_fn(test_data)
+
+  # Should return all rows
+  expect_equal(nrow(result), 3)
+  expect_equal(result$revision, c(1, 2, 3))
+  expect_equal(result$title, c("Rev 1", "Rev 2", "Rev 3"))
+})
+
+test_that(".make_revision_filter creates correct filter function for specific revision", {
+  # Test with revision 2
+  filter_fn <- .make_revision_filter(2)
+  expect_true(is.function(filter_fn))
+
+  # Create test data frame with multiple revisions
+  test_data <- tibble::tibble(
+    item_id = rep("test-id", 3),
+    revision = c(1, 2, 3),
+    title = c("Rev 1", "Rev 2", "Rev 3")
+  )
+
+  # Apply the filter
+  result <- filter_fn(test_data)
+
+  # Should return only revision 2
+  expect_equal(nrow(result), 1)
+  expect_equal(result$revision, 2)
+  expect_equal(result$title, "Rev 2")
+
+  # Test with revision 1
+  filter_fn_1 <- .make_revision_filter(1)
+  result_1 <- filter_fn_1(test_data)
+  expect_equal(nrow(result_1), 1)
+  expect_equal(result_1$revision, 1)
+
+  # Test with revision 3
+  filter_fn_3 <- .make_revision_filter(3)
+  result_3 <- filter_fn_3(test_data)
+  expect_equal(nrow(result_3), 1)
+  expect_equal(result_3$revision, 3)
+})
+
+test_that(".make_revision_filter handles edge cases correctly", {
+  # Test with single revision
+  test_data_single <- tibble::tibble(
+    item_id = "test-id",
+    revision = 1,
+    title = "Only Rev"
+  )
+
+  # "max" should return the only row
+  filter_max <- .make_revision_filter("max")
+  result_max <- filter_max(test_data_single)
+  expect_equal(nrow(result_max), 1)
+  expect_equal(result_max$revision, 1)
+
+  # "all" should return the only row
+  filter_all <- .make_revision_filter("all")
+  result_all <- filter_all(test_data_single)
+  expect_equal(nrow(result_all), 1)
+
+  # Empty data frame
+  test_data_empty <- tibble::tibble(
+    item_id = character(0),
+    revision = integer(0),
+    title = character(0)
+  )
+
+  # All filters should return empty
+  expect_equal(nrow(filter_max(test_data_empty)), 0)
+  expect_equal(nrow(filter_all(test_data_empty)), 0)
+  filter_specific <- .make_revision_filter(1)
+  expect_equal(nrow(filter_specific(test_data_empty)), 0)
+
+  # Non-existent revision
+  test_data <- tibble::tibble(
+    item_id = rep("test-id", 3),
+    revision = c(1, 2, 3)
+  )
+  filter_nonexistent <- .make_revision_filter(99)
+  result_nonexistent <- filter_nonexistent(test_data)
+  expect_equal(nrow(result_nonexistent), 0)
+})
+
+test_that(".make_revision_filter integrates correctly with .retrieve", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Create item with initial data
+    proto_item <- list(title="Original", volume=1)
+    item <- .new_object(testcon, "item", proto_item)
+    item_id <- .insert_one(testcon, item)
+
+    # Create multiple revisions through updates
+    item_rev1 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev1, title="Updated Once", volume=2)
+
+    item_rev2 <- .retrieve(testcon, "item", item_id)[[1]]
+    .update_object(testcon, item_rev2, title="Updated Twice", volume=3)
+
+    # Now we have 3 revisions (1, 2, 3) with stages (-1, -1, 0)
+
+    # Test "max" mode - should get revision 3 (active)
+    retrieved_max <- .retrieve(testcon, "item", item_id, stage=0, revision="max")
+    expect_equal(length(retrieved_max), 1)
+    expect_equal(as.integer(retrieved_max[[1]]$revision), 3)
+    expect_equal(retrieved_max[[1]]$title, "Updated Twice")
+
+    # Test "all" mode with stage=0 - should get only active revision
+    retrieved_all_active <- .retrieve(testcon, "item", item_id, stage=0, revision="all", as_list=FALSE)
+    expect_equal(nrow(retrieved_all_active), 1)
+    expect_equal(as.integer(retrieved_all_active$revision), 3)
+
+    # Test "all" mode with stage=-1 - should get all inactive revisions
+    retrieved_all_inactive <- .retrieve(testcon, "item", item_id, stage=-1, revision="all", as_list=FALSE)
+    expect_equal(nrow(retrieved_all_inactive), 2)
+    expect_equal(sort(as.integer(retrieved_all_inactive$revision)), c(1, 2))
+
+    # Test specific revision - get revision 1 (inactive)
+    retrieved_rev1 <- .retrieve(testcon, "item", item_id, stage=-1, revision=1)
+    expect_equal(length(retrieved_rev1), 1)
+    expect_equal(as.integer(retrieved_rev1[[1]]$revision), 1)
+    expect_equal(retrieved_rev1[[1]]$title, "Original")
+
+    # Test specific revision - get revision 2 (inactive)
+    retrieved_rev2 <- .retrieve(testcon, "item", item_id, stage=-1, revision=2)
+    expect_equal(length(retrieved_rev2), 1)
+    expect_equal(as.integer(retrieved_rev2[[1]]$revision), 2)
+    expect_equal(retrieved_rev2[[1]]$title, "Updated Once")
+  }
+})
+
+test_that(".make_revision_filter works with different object types", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Test with person object
+    proto_person <- list(surnames="Smith", primary_given_names="John")
+    person <- .new_object(testcon, "person", proto_person)
+    person_id <- .insert_one(testcon, person)
+
+    # Update to create revision 2
+    person_rev1 <- .retrieve(testcon, "person", person_id)[[1]]
+    .update_object(testcon, person_rev1, surnames="Smith-Jones")
+
+    # Test "max" retrieves latest revision
+    retrieved_person <- .retrieve(testcon, "person", person_id, revision="max")
+    expect_equal(length(retrieved_person), 1)
+    expect_equal(as.integer(retrieved_person[[1]]$revision), 2)
+    expect_equal(retrieved_person[[1]]$surnames, "Smith-Jones")
+
+    # Test "all" with stage=-1 gets old revision
+    old_person <- .retrieve(testcon, "person", person_id, stage=-1, revision="all", as_list=FALSE)
+    expect_equal(nrow(old_person), 1)
+    expect_equal(as.integer(old_person$revision), 1)
+    expect_equal(old_person$surnames, "Smith")
+  }
+})
