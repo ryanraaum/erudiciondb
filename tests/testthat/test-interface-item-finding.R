@@ -552,3 +552,171 @@ test_that(".citekey_exists_in_db prevents collision in insert_new_object", {
     expect_false(item_id_1 == item_id_2)
   }
 })
+
+# NULL/NA edge case tests for finding functions ------------------------------
+
+test_that(".find_item_by_identifier handles NULL and NA parameters", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # All NULL - should return empty result
+    found_all_null <- .find_item_by_identifier(testcon, doi=NULL, pmid=NULL, pmcid=NULL)
+    expect_equal(nrow(found_all_null), 0)
+
+    # All NA - should return empty result
+    found_all_na <- .find_item_by_identifier(testcon, doi=NA, pmid=NA, pmcid=NA)
+    expect_equal(nrow(found_all_na), 0)
+
+    # Mixed NULL and NA - should return empty result
+    found_mixed_1 <- .find_item_by_identifier(testcon, doi=NULL, pmid=NA, pmcid=NULL)
+    expect_equal(nrow(found_mixed_1), 0)
+
+    found_mixed_2 <- .find_item_by_identifier(testcon, doi=NA, pmid=NULL, pmcid=NA)
+    expect_equal(nrow(found_mixed_2), 0)
+
+    # Empty strings - should return empty result (no match)
+    found_empty <- .find_item_by_identifier(testcon, doi="", pmid="", pmcid="")
+    expect_equal(nrow(found_empty), 0)
+
+    # One valid, rest NULL - should work if there's a match
+    proto_new_item <- list(
+      title = "Test Article",
+      doi = "10.1234/test",
+      pmid = "12345678",
+      pmcid = "PMC1234567"
+    )
+    new_item <- .new_object(testcon, "item", proto_new_item)
+    new_item_id <- .insert_one(testcon, new_item)
+
+    found_doi_only <- .find_item_by_identifier(testcon, doi="10.1234/test", pmid=NULL, pmcid=NULL)
+    expect_true(nrow(found_doi_only) > 0)
+    expect_equal(found_doi_only$item_id[1], new_item_id)
+
+    found_pmid_only <- .find_item_by_identifier(testcon, doi=NULL, pmid="12345678", pmcid=NULL)
+    expect_true(nrow(found_pmid_only) > 0)
+    expect_equal(found_pmid_only$item_id[1], new_item_id)
+
+    found_pmcid_only <- .find_item_by_identifier(testcon, doi=NULL, pmid=NULL, pmcid="PMC1234567")
+    expect_true(nrow(found_pmcid_only) > 0)
+    expect_equal(found_pmcid_only$item_id[1], new_item_id)
+
+    # One valid, rest NA - should also work
+    found_doi_na <- .find_item_by_identifier(testcon, doi="10.1234/test", pmid=NA, pmcid=NA)
+    expect_true(nrow(found_doi_na) > 0)
+    expect_equal(found_doi_na$item_id[1], new_item_id)
+  }
+})
+
+test_that(".find_item_by_year_volume_page handles incomplete data", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # Insert a test item with year/volume/page
+    proto_new_item <- list(
+      title = "Test Article",
+      volume = "42",
+      page_first = "123",
+      issued = as.Date("2020-01-01")
+    )
+    new_item <- .new_object(testcon, "item", proto_new_item)
+    new_item_id <- .insert_one(testcon, new_item)
+
+    # Missing year (NULL) - should return empty result (requires all three)
+    found_no_year <- .find_item_by_year_volume_page(testcon, year=NULL, volume="42", first_page="123")
+    expect_equal(nrow(found_no_year), 0)
+
+    # Missing year (NA) - should return empty result
+    found_na_year <- .find_item_by_year_volume_page(testcon, year=NA, volume="42", first_page="123")
+    expect_equal(nrow(found_na_year), 0)
+
+    # Missing volume (NULL) - should return empty result
+    found_no_volume <- .find_item_by_year_volume_page(testcon, year="2020", volume=NULL, first_page="123")
+    expect_equal(nrow(found_no_volume), 0)
+
+    # Missing volume (NA) - should return empty result
+    found_na_volume <- .find_item_by_year_volume_page(testcon, year="2020", volume=NA, first_page="123")
+    expect_equal(nrow(found_na_volume), 0)
+
+    # Missing first_page (NULL) - should return empty result
+    found_no_page <- .find_item_by_year_volume_page(testcon, year="2020", volume="42", first_page=NULL)
+    expect_equal(nrow(found_no_page), 0)
+
+    # Missing first_page (NA) - should return empty result
+    found_na_page <- .find_item_by_year_volume_page(testcon, year="2020", volume="42", first_page=NA)
+    expect_equal(nrow(found_na_page), 0)
+
+    # All NULL - should return empty result
+    found_all_null <- .find_item_by_year_volume_page(testcon, year=NULL, volume=NULL, first_page=NULL)
+    expect_equal(nrow(found_all_null), 0)
+
+    # All NA - should return empty result
+    found_all_na <- .find_item_by_year_volume_page(testcon, year=NA, volume=NA, first_page=NA)
+    expect_equal(nrow(found_all_na), 0)
+
+    # Mixed NULL and NA - should return empty result
+    found_mixed <- .find_item_by_year_volume_page(testcon, year=NULL, volume=NA, first_page=NULL)
+    expect_equal(nrow(found_mixed), 0)
+
+    # All three valid - should find the item
+    found_valid <- .find_item_by_year_volume_page(testcon, year="2020", volume="42", first_page="123")
+    expect_true(nrow(found_valid) > 0)
+    expect_equal(found_valid$item_id[1], new_item_id)
+  }
+})
+
+test_that(".find_item_by_person handles NULL and NA person_id", {
+  for (db in supported_databases()) {
+    testcon <- make_testcon(db)
+    expect_no_error(edb_create_tables(testcon))
+
+    # NULL person_id - should return empty result
+    found_null <- .find_item_by_person(testcon, person_id=NULL)
+    expect_equal(nrow(found_null), 0)
+
+    # NA person_id - should return empty result
+    found_na <- .find_item_by_person(testcon, person_id=NA)
+    expect_equal(nrow(found_na), 0)
+
+    # Non-existent person_id (valid UUID format but not in DB) - should return empty result
+    found_nonexistent <- .find_item_by_person(testcon, person_id="00000000-0000-0000-0000-000000000000")
+    expect_equal(nrow(found_nonexistent), 0)
+
+    # Create item, person, and link them to verify valid search still works
+    proto_new_item <- list(
+      title = "Test Article",
+      container_title = "Test Journal"
+    )
+    new_item <- .new_object(testcon, "item", proto_new_item)
+    new_item_id <- .insert_one(testcon, new_item)
+
+    proto_personlist <- list(
+      item_id = new_item_id,
+      personlist_type = "author"
+    )
+    new_personlist <- .new_object(testcon, "personlist", proto_personlist)
+    personlist_id <- .insert_one(testcon, new_personlist)
+
+    proto_new_person <- list(
+      surnames = "Smith",
+      primary_given_names = "John"
+    )
+    new_person <- .new_object(testcon, "person", proto_new_person)
+    new_person_id <- .insert_one(testcon, new_person)
+
+    proto_item_person <- list(
+      personlist_id = personlist_id,
+      person_id = new_person_id,
+      family = "Smith",
+      given = "John"
+    )
+    new_item_person <- .new_object(testcon, "item_person", proto_item_person)
+    .insert_one(testcon, new_item_person)
+
+    # Valid person_id - should find the item
+    found_valid <- .find_item_by_person(testcon, person_id=new_person_id)
+    expect_true(nrow(found_valid) > 0)
+    expect_equal(found_valid$item_id[1], new_item_id)
+  }
+})
