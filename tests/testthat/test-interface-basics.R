@@ -546,3 +546,144 @@ test_that("ErudicionDB$insert_object returns correct object ID", {
     expect_equal(testdbobj$retrieve("person", person3_id)[[1]]$surnames, "Carter")
   }
 })
+
+# ErudicionDB$tbl() comprehensive tests ---------------------------------------
+
+test_that("ErudicionDB$tbl returns dplyr tbl interface", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Test that tbl() returns a tbl object
+    items_tbl <- testdbobj$tbl("items")
+    expect_true(inherits(items_tbl, "tbl"))
+
+    # Test that the tbl is functional for queries
+    # Empty table should have 0 rows
+    count_result <- items_tbl |> dplyr::count() |> dplyr::collect()
+    expect_equal(count_result$n, 0)
+
+    # Insert an item and verify tbl can query it
+    proto_new_item <- list(
+      title = "Test Article",
+      container_title = "Test Journal",
+      volume = "42"
+    )
+    new_item <- testdbobj$insert_new_object("item", proto_new_item, stage = 0)
+
+    # Query through tbl interface
+    items_count <- testdbobj$tbl("items") |> dplyr::count() |> dplyr::collect()
+    expect_equal(items_count$n, 1)
+
+    # Test that filtering works
+    filtered_items <- testdbobj$tbl("items") |>
+      dplyr::filter(title == "Test Article") |>
+      dplyr::collect()
+    expect_equal(nrow(filtered_items), 1)
+    expect_equal(filtered_items$title[1], "Test Article")
+
+    # Test that selecting columns works
+    titles_only <- testdbobj$tbl("items") |>
+      dplyr::select(title) |>
+      dplyr::collect()
+    expect_equal(ncol(titles_only), 1)
+    expect_equal(titles_only$title[1], "Test Article")
+
+    # Test that complex queries work
+    complex_query <- testdbobj$tbl("items") |>
+      dplyr::filter(volume == "42") |>
+      dplyr::select(title, container_title, volume) |>
+      dplyr::collect()
+    expect_equal(nrow(complex_query), 1)
+    expect_equal(complex_query$volume[1], "42")
+  }
+})
+
+test_that("ErudicionDB$tbl works for all table names", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # All 9 table names in the schema
+    table_names <- c(
+      "persons",
+      "person_roles",
+      "item_persons",
+      "personlists",
+      "affiliation_references",
+      "items",
+      "issues",
+      "person_identifiers",
+      "item_person_identifiers"
+    )
+
+    # Test that each table can be accessed
+    for (table_name in table_names) {
+      tbl_obj <- expect_no_error(testdbobj$tbl(table_name))
+      expect_true(inherits(tbl_obj, "tbl"))
+
+      # Verify table is initially empty
+      count_result <- tbl_obj |> dplyr::count() |> dplyr::collect()
+      expect_equal(count_result$n, 0)
+    }
+  }
+})
+
+test_that("ErudicionDB$tbl handles invalid table names", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Invalid table name should error
+    expect_error(testdbobj$tbl("nonexistent_table"))
+    expect_error(testdbobj$tbl(""))
+    expect_error(testdbobj$tbl("SELECT * FROM items")) # SQL injection attempt
+  }
+})
+
+test_that("ErudicionDB$tbl works with stage and revision columns", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert multiple revisions of an item
+    proto_item <- list(
+      title = "Original Title",
+      container_title = "Journal"
+    )
+    item_id <- testdbobj$insert_new_object("item", proto_item, stage = 0)
+
+    # Update the item to create a new revision using the private function
+    updated_item <- testdbobj$retrieve("item", item_id)[[1]]
+    updated_item$title <- "Updated Title"
+
+    # Use the pool connection to call private .update_object
+    checked_out_con <- pool::poolCheckout(testdbobj$con)
+    tryCatch({
+      .update_object(checked_out_con, updated_item)
+    }, finally = {
+      pool::poolReturn(checked_out_con)
+    })
+
+    # Use tbl to query both active and inactive revisions
+    this_item_id <- item_id  # Store in a local variable for dplyr
+    all_revisions <- testdbobj$tbl("items") |>
+      dplyr::filter(.data$item_id == this_item_id) |>
+      dplyr::arrange(.data$revision) |>
+      dplyr::collect()
+
+    expect_equal(nrow(all_revisions), 2)
+    expect_equal(all_revisions$revision, c(1, 2))
+    expect_equal(all_revisions$stage, c(-1, 0))  # First is inactive, second is active
+    expect_equal(all_revisions$title[1], "Original Title")
+    expect_equal(all_revisions$title[2], "Updated Title")
+
+    # Filter to only active items
+    active_only <- testdbobj$tbl("items") |>
+      dplyr::filter(.data$item_id == this_item_id, .data$stage == 0) |>
+      dplyr::collect()
+
+    expect_equal(nrow(active_only), 1)
+    expect_equal(active_only$title[1], "Updated Title")
+  }
+})
