@@ -445,3 +445,112 @@ test_that(".name_distance handles edge cases correctly", {
   expect_equal(result[1], 0)  # Exact match
   expect_true(result[2] > 0 && result[2] < 0.3)  # Accents create distance
 })
+
+
+# Tests for .rename_element() ------------------------------------------------
+
+test_that(".rename_element renames matching elements", {
+  # Basic exact match rename
+  test_list <- list(citation_key = "Smith2020", title = "Test Article")
+  result <- .rename_element(test_list, "citation_key", "id")
+  expect_equal(names(result), c("id", "title"))
+  expect_equal(result$id, "Smith2020")
+  expect_equal(result$title, "Test Article")
+
+  # Rename with underscore to hyphen (common CSL conversion)
+  test_list <- list(container_title = "Nature", author = "Smith")
+  result <- .rename_element(test_list, "container_title", "container-title")
+  expect_equal(names(result), c("container-title", "author"))
+  expect_equal(result$`container-title`, "Nature")
+})
+
+test_that(".rename_element handles pattern matching", {
+  # Pattern matching with str_detect - matches substrings
+  test_list <- list(event_title = "Conference", event_place = "Boston", title = "Paper")
+  result <- .rename_element(test_list, "event", "matched")
+  # Both event_title and event_place should match the pattern "event"
+  expect_equal(names(result), c("matched", "matched", "title"))
+  expect_equal(result[[1]], "Conference")
+  expect_equal(result[[2]], "Boston")
+  expect_equal(result$title, "Paper")
+
+  # Exact pattern to avoid substring matching
+  test_list <- list(page = "123", page_first = "1", title = "Test")
+  result <- .rename_element(test_list, "^page$", "pages")
+  # Only exact "page" should be renamed, not "page_first"
+  expect_equal(names(result), c("pages", "page_first", "title"))
+  expect_equal(result$pages, "123")
+  expect_equal(result$page_first, "1")
+})
+
+test_that(".rename_element returns unchanged list when no matches", {
+  # No matching elements
+  test_list <- list(title = "Test", author = "Smith", year = 2020)
+  result <- .rename_element(test_list, "nonexistent_field", "new_name")
+  expect_equal(result, test_list)
+  expect_equal(names(result), c("title", "author", "year"))
+
+  # Pattern that doesn't match anything
+  test_list <- list(doi = "10.1234", pmid = "12345")
+  result <- .rename_element(test_list, "citation", "cite")
+  expect_equal(result, test_list)
+})
+
+test_that(".rename_element handles edge cases", {
+  # Empty list - returns empty list with character(0) names attribute
+  result <- .rename_element(list(), "anything", "something")
+  expect_length(result, 0)
+  expect_true(is.list(result))
+
+  # List with one element
+  test_list <- list(single = "value")
+  result <- .rename_element(test_list, "single", "renamed")
+  expect_equal(names(result), "renamed")
+  expect_equal(result$renamed, "value")
+
+  # Rename to same name (no-op)
+  test_list <- list(field = "value", other = "data")
+  result <- .rename_element(test_list, "field", "field")
+  expect_equal(result, test_list)
+
+  # Multiple underscores to hyphens (CSL naming convention)
+  test_list <- list(
+    original_publisher_place = "NYC",
+    original_publisher = "Press",
+    title = "Book"
+  )
+  result <- .rename_element(test_list, "original_publisher_place", "original-publisher-place")
+  expect_equal(names(result)[1], "original-publisher-place")
+  expect_equal(result$`original-publisher-place`, "NYC")
+
+  # Special characters in values (should not affect renaming)
+  test_list <- list(field_name = "Value with $pecial ch@rs!", other = "Normal")
+  result <- .rename_element(test_list, "field_name", "renamed-field")
+  expect_equal(names(result), c("renamed-field", "other"))
+  expect_equal(result$`renamed-field`, "Value with $pecial ch@rs!")
+})
+
+test_that(".rename_element preserves list structure and values", {
+  # Preserve value types
+  test_list <- list(
+    text = "string",
+    number = 42,
+    decimal = 3.14,
+    logical = TRUE,
+    null_val = NULL,
+    na_val = NA
+  )
+  result <- .rename_element(test_list, "text", "renamed")
+  expect_equal(result$renamed, "string")
+  expect_equal(result$number, 42)
+  expect_equal(result$decimal, 3.14)
+  expect_equal(result$logical, TRUE)
+  expect_null(result$null_val)
+  expect_true(is.na(result$na_val))
+
+  # Preserve order of non-renamed elements
+  test_list <- list(first = 1, second = 2, third = 3, fourth = 4)
+  result <- .rename_element(test_list, "second", "SECOND")
+  expect_equal(names(result), c("first", "SECOND", "third", "fourth"))
+  expect_equal(unname(unlist(result)), c(1, 2, 3, 4))
+})
