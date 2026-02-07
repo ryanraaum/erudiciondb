@@ -188,3 +188,147 @@ test_that("dbobj$add_augmentor and dbobj$add_validator work", {
     expect_no_error(this_dbobj$add_validator("test", test_validator))
   }
 })
+
+
+# Tests for ErudicionDB$disconnect() ------------------------------------------
+
+test_that("ErudicionDB$disconnect closes connection pool", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Verify pool is valid before disconnect
+    expect_true(inherits(testdbobj$con, "Pool"))
+    expect_true(DBI::dbIsValid(testdbobj$con))
+
+    # Disconnect should not error
+    expect_no_error(testdbobj$disconnect())
+
+    # After disconnect, pool should be NULL
+    expect_null(testdbobj$con)
+  }
+})
+
+test_that("ErudicionDB$disconnect is idempotent (multiple calls are safe)", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # First disconnect
+    expect_no_error(testdbobj$disconnect())
+    expect_null(testdbobj$con)
+
+    # Second disconnect should not error (pool already NULL)
+    expect_no_error(testdbobj$disconnect())
+    expect_null(testdbobj$con)
+
+    # Third disconnect should also not error
+    expect_no_error(testdbobj$disconnect())
+    expect_null(testdbobj$con)
+  }
+})
+
+test_that("ErudicionDB can reconnect after disconnect", {
+  for (db in supported_databases()) {
+    # Create initial connection
+    dbargs <- if (db == "sqlite") {
+      list(drv = RSQLite::SQLite(), dbname = ":memory:")
+    } else {
+      list(drv = duckdb::duckdb(), dbdir = ":memory:")
+    }
+
+    testdbobj <- ErudicionDB$new(dbargs)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Verify initial connection works
+    expect_true(DBI::dbIsValid(testdbobj$con))
+
+    # Disconnect
+    testdbobj$disconnect()
+    expect_null(testdbobj$con)
+
+    # Reconnect using establish_connection
+    expect_no_error(testdbobj$establish_connection(dbargs))
+
+    # Verify pool is valid again
+    expect_true(inherits(testdbobj$con, "Pool"))
+    expect_true(DBI::dbIsValid(testdbobj$con))
+
+    # Clean up
+    testdbobj$disconnect()
+  }
+})
+
+test_that("ErudicionDB is functional after reconnect", {
+  for (db in supported_databases()) {
+    # Create initial connection
+    dbargs <- if (db == "sqlite") {
+      list(drv = RSQLite::SQLite(), dbname = ":memory:")
+    } else {
+      list(drv = duckdb::duckdb(), dbdir = ":memory:")
+    }
+
+    testdbobj <- ErudicionDB$new(dbargs)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert a person before disconnect
+    proto_person_1 <- list(
+      primary_given_names = "Jane",
+      surnames = "Smith"
+    )
+    person_id_1 <- expect_no_error(testdbobj$insert_new_object("person", proto_person_1))
+
+    # Verify person exists
+    retrieved_1 <- testdbobj$retrieve("person", person_id_1)
+    expect_equal(length(retrieved_1), 1)
+    expect_equal(retrieved_1[[1]]$surnames, "Smith")
+
+    # Disconnect and reconnect
+    testdbobj$disconnect()
+    expect_null(testdbobj$con)
+
+    # Reconnect - need to recreate tables since memory DB is lost
+    testdbobj$establish_connection(dbargs)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert another person after reconnect to verify functionality
+    proto_person_2 <- list(
+      primary_given_names = "John",
+      surnames = "Doe"
+    )
+    person_id_2 <- expect_no_error(testdbobj$insert_new_object("person", proto_person_2))
+
+    # Verify new person exists and database operations work
+    retrieved_2 <- testdbobj$retrieve("person", person_id_2)
+    expect_equal(length(retrieved_2), 1)
+    expect_equal(retrieved_2[[1]]$surnames, "Doe")
+
+    # Verify tbl() method works after reconnect
+    persons_count <- testdbobj$tbl("persons") |> dplyr::count() |> dplyr::pull(n)
+    expect_equal(persons_count, 1)  # Only the new person (memory DB was reset)
+
+    # Clean up
+    testdbobj$disconnect()
+  }
+})
+
+test_that("ErudicionDB$disconnect prevents operations on closed connection", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Disconnect
+    testdbobj$disconnect()
+    expect_null(testdbobj$con)
+
+    # Attempting to use tbl() on NULL pool should error
+    expect_error(testdbobj$tbl("items"))
+
+    # Attempting database operations should also error
+    proto_person <- list(
+      primary_given_names = "Test",
+      surnames = "Person"
+    )
+    expect_error(testdbobj$insert_new_object("person", proto_person))
+  }
+})
