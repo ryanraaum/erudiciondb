@@ -332,3 +332,217 @@ test_that("ErudicionDB$disconnect prevents operations on closed connection", {
     expect_error(testdbobj$insert_new_object("person", proto_person))
   }
 })
+
+
+# Tests for ErudicionDB$insert_object() ---------------------------------------
+
+test_that("ErudicionDB$insert_object inserts pre-validated person objects", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Create a person object using new_object (validates and augments)
+    proto_person <- list(
+      primary_given_names = "Alice",
+      other_given_names = "Marie",
+      surnames = "Johnson"
+    )
+    person_obj <- expect_no_error(testdbobj$new_object("person", proto_person))
+
+    # Insert the pre-validated object
+    person_id <- expect_no_error(testdbobj$insert_object(person_obj))
+    expect_true(!is.null(person_id))
+
+    # Verify person appears in database correctly
+    retrieved <- testdbobj$retrieve("person", person_id)
+    expect_equal(length(retrieved), 1)
+    retrieved_person <- retrieved[[1]]
+
+    expect_equal(retrieved_person$primary_given_names, "Alice")
+    expect_equal(retrieved_person$other_given_names, "Marie")
+    expect_equal(retrieved_person$surnames, "Johnson")
+    expect_equal(retrieved_person$person_id, person_id)
+
+    # Verify augmented fields exist (added by .augment_person)
+    expect_true("ascii_given_names" %in% names(retrieved_person))
+    expect_true("ascii_surnames" %in% names(retrieved_person))
+    expect_true("short_referent" %in% names(retrieved_person))
+    expect_equal(retrieved_person$short_referent, "Alice")
+  }
+})
+
+test_that("ErudicionDB$insert_object inserts pre-validated item objects", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Create an item object using new_object
+    proto_item <- list(
+      title = "A Study of Database Design",
+      container_title = "Journal of Computing",
+      volume = 42,
+      issue = 3,
+      page = "100-120"
+    )
+    item_obj <- expect_no_error(testdbobj$new_object("item", proto_item))
+
+    # Insert the pre-validated object
+    item_id <- expect_no_error(testdbobj$insert_object(item_obj))
+    expect_true(!is.null(item_id))
+
+    # Verify item appears in database correctly
+    retrieved <- testdbobj$retrieve("item", item_id)
+    expect_equal(length(retrieved), 1)
+    retrieved_item <- retrieved[[1]]
+
+    expect_equal(retrieved_item$title, "A Study of Database Design")
+    expect_equal(retrieved_item$container_title, "Journal of Computing")
+    expect_equal(retrieved_item$volume, "42")  # Stored/retrieved as string
+    expect_equal(retrieved_item$issue, "3")     # Stored/retrieved as string
+    expect_equal(retrieved_item$page, "100-120")
+    expect_equal(retrieved_item$item_id, item_id)
+  }
+})
+
+test_that("ErudicionDB$insert_object inserts pre-validated person_identifier objects", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Create a person_identifier object using new_object
+    proto_identifier <- list(
+      person_id = uuid::UUIDgenerate(),
+      id_type = "orcid",
+      id_value = "0000-0001-2345-6789"
+    )
+    identifier_obj <- expect_no_error(testdbobj$new_object("person_identifier", proto_identifier))
+
+    # Insert the pre-validated object
+    identifier_id <- expect_no_error(testdbobj$insert_object(identifier_obj))
+    expect_true(!is.null(identifier_id))
+
+    # Verify person_identifier appears in database correctly
+    retrieved <- testdbobj$retrieve("person_identifier", identifier_id)
+    expect_equal(length(retrieved), 1)
+    retrieved_identifier <- retrieved[[1]]
+
+    expect_equal(retrieved_identifier$id_type, "orcid")
+    expect_equal(retrieved_identifier$id_value, "0000-0001-2345-6789")
+    expect_equal(retrieved_identifier$person_identifier_id, identifier_id)
+  }
+})
+
+test_that("ErudicionDB$insert_object bypasses validation (by design)", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Demonstrate that insert_object bypasses validation by creating
+    # an object manually without going through new_object()
+    # This person object lacks fields that would normally be added by augmentors
+
+    # Get table columns to know what fields are required
+    checked_out_con <- pool::poolCheckout(testdbobj$con)
+    person_cols <- table_columns(checked_out_con, "persons")
+    pool::poolReturn(checked_out_con)
+
+    # Create minimal person object with only required database fields
+    manual_person <- list(
+      person_id = uuid::UUIDgenerate(),
+      surnames = "ManualEntry",
+      primary_given_names = "Test",
+      revision = 1,
+      stage = 0,
+      created = Sys.time(),
+      object_type = "person"
+    )
+
+    # This bypasses the augmentor that would add initials, ascii variants, etc.
+    # insert_object accepts it without validation/augmentation
+    person_id <- expect_no_error(testdbobj$insert_object(manual_person))
+    expect_equal(person_id, manual_person$person_id)
+
+    # Verify object was inserted even without augmentation
+    retrieved <- testdbobj$retrieve("person", person_id)
+    expect_equal(length(retrieved), 1)
+    expect_equal(retrieved[[1]]$surnames, "ManualEntry")
+
+    # Note: Fields added by augmentor (like initials) will be NULL/NA
+    # because insert_object bypassed the augmentation step
+  }
+})
+
+test_that("ErudicionDB$insert_object works with multiple object types", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert person
+    person_obj <- testdbobj$new_object("person", list(
+      surnames = "Williams",
+      primary_given_names = "Emma"
+    ))
+    person_id <- expect_no_error(testdbobj$insert_object(person_obj))
+
+    # Insert item
+    item_obj <- testdbobj$new_object("item", list(
+      title = "Test Article",
+      container_title = "Test Journal"
+    ))
+    item_id <- expect_no_error(testdbobj$insert_object(item_obj))
+
+    # Insert personlist
+    personlist_obj <- testdbobj$new_object("personlist", list(
+      item_id = item_id,
+      personlist_type = "author"
+    ))
+    personlist_id <- expect_no_error(testdbobj$insert_object(personlist_obj))
+
+    # Insert item_person (linking person to personlist)
+    item_person_obj <- testdbobj$new_object("item_person", list(
+      personlist_id = personlist_id,
+      person_id = person_id,
+      family = "Williams",
+      given = "Emma"
+    ))
+    item_person_id <- expect_no_error(testdbobj$insert_object(item_person_obj))
+
+    # Verify all objects were inserted
+    expect_true(!is.null(person_id))
+    expect_true(!is.null(item_id))
+    expect_true(!is.null(personlist_id))
+    expect_true(!is.null(item_person_id))
+
+    # Verify retrieval works for all
+    expect_equal(length(testdbobj$retrieve("person", person_id)), 1)
+    expect_equal(length(testdbobj$retrieve("item", item_id)), 1)
+    expect_equal(length(testdbobj$retrieve("personlist", personlist_id)), 1)
+    expect_equal(length(testdbobj$retrieve("item_person", item_person_id)), 1)
+  }
+})
+
+test_that("ErudicionDB$insert_object returns correct object ID", {
+  for (db in supported_databases()) {
+    testdbobj <- make_testdbobj(db)
+    expect_no_error(edb_create_tables(testdbobj$con))
+
+    # Insert multiple persons and verify IDs are unique
+    person1_obj <- testdbobj$new_object("person", list(surnames = "Anderson"))
+    person2_obj <- testdbobj$new_object("person", list(surnames = "Baker"))
+    person3_obj <- testdbobj$new_object("person", list(surnames = "Carter"))
+
+    person1_id <- testdbobj$insert_object(person1_obj)
+    person2_id <- testdbobj$insert_object(person2_obj)
+    person3_id <- testdbobj$insert_object(person3_obj)
+
+    # All IDs should be unique
+    expect_false(person1_id == person2_id)
+    expect_false(person2_id == person3_id)
+    expect_false(person1_id == person3_id)
+
+    # Each ID should retrieve the correct person
+    expect_equal(testdbobj$retrieve("person", person1_id)[[1]]$surnames, "Anderson")
+    expect_equal(testdbobj$retrieve("person", person2_id)[[1]]$surnames, "Baker")
+    expect_equal(testdbobj$retrieve("person", person3_id)[[1]]$surnames, "Carter")
+  }
+})
