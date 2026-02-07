@@ -19,9 +19,79 @@ test_that(".word_from_title extracts word(s) from title", {
   expect_equal(.word_from_title("The Future Islands", n=2), c("Future","Islands"))
 })
 
+test_that(".word_from_title handles edge cases", {
+  # Empty string - after processing becomes NA
+  result <- .word_from_title("")
+  expect_length(result, 1)
+  expect_true(is.na(result[1]))
+
+  # Single word - no spaces
+  expect_equal(.word_from_title("GenBank"), "Genbank")
+
+  # All stopwords - should return empty after filtering
+  result <- .word_from_title("the a an")
+  expect_true(all(is.na(result)))
+
+  # n > available words - seq_len will include NAs
+  result <- .word_from_title("One Two", n=5)
+  expect_length(result, 5)
+  expect_equal(result[1], "One")
+  expect_equal(result[2], "Two")
+  expect_true(is.na(result[3]))
+  expect_true(is.na(result[4]))
+  expect_true(is.na(result[5]))
+
+  # Case handling - converts to title case
+  expect_equal(.word_from_title("ALLCAPS TITLE"), "Allcaps")
+  expect_equal(.word_from_title("lowercase title"), "Lowercase")
+  expect_equal(.word_from_title("MiXeD cAsE"), "Mixed")
+
+  # Single non-stopword with stopwords
+  expect_equal(.word_from_title("The Analysis"), "Analysis")
+})
+
 test_that(".make_citekey works", {
   expect_equal(.make_citekey("Clark", "2015", "GenBank"), "Clark2015Genbank")
   expect_equal(.make_citekey("Clark", "2015", "The GenBank"), "Clark2015Genbank")
+})
+
+test_that(".make_citekey handles NA and NULL inputs", {
+  # NA surname
+  expect_equal(.make_citekey(NA, "2020", "Title"), "2020Title")
+
+  # NA year
+  expect_equal(.make_citekey("Smith", NA, "Title"), "SmithTitle")
+
+  # NA title
+  expect_equal(.make_citekey("Smith", "2020", NA), "Smith2020")
+
+  # All NA
+  expect_equal(.make_citekey(NA, NA, NA), "")
+
+  # Multiple NA combinations
+  expect_equal(.make_citekey(NA, NA, "Title"), "Title")
+  expect_equal(.make_citekey(NA, "2020", NA), "2020")
+  expect_equal(.make_citekey("Smith", NA, NA), "Smith")
+})
+
+test_that(".make_citekey handles special characters", {
+  # Accented characters - converted to ASCII
+  expect_equal(.make_citekey("Müller", "2020", "Naïve"), "Muller2020Naive")
+  expect_equal(.make_citekey("Søren", "2020", "Café"), "Soren2020Cafe")
+
+  # Hyphens in surname - removed (split on \W+)
+  expect_equal(.make_citekey("Smith-Jones", "2020", "Title"), "SmithJones2020Title")
+
+  # Apostrophes - removed
+  expect_equal(.make_citekey("O'Brien", "2020", "Title"), "OBrien2020Title")
+
+  # Multiple words in title with n parameter
+  expect_equal(.make_citekey("Smith", "2020", "The Big Analysis", n=2), "Smith2020BigAnalysis")
+  # When n > available words, NA gets pasted into result
+  expect_equal(.make_citekey("Smith", "2020", "A Short Title", n=3), "Smith2020ShortTitleNA")
+
+  # Special characters in title - hyphens in title words are NOT removed
+  expect_equal(.make_citekey("Smith", "2020", "COVID-19 Analysis"), "Smith2020Covid-19")
 })
 
 test_that(".select_surname works", {
@@ -72,11 +142,80 @@ test_that(".select_year works", {
   expect_true(is.na(.select_year(test_item_2)))
 })
 
+test_that(".select_year handles edge cases", {
+  # NULL item_data - should error or return NA
+  # Note: aidr::this_exists likely handles this gracefully
+  test_item_null <- list(item=list())
+  expect_true(is.na(.select_year(test_item_null)))
+
+  # Empty item object
+  test_item_empty <- list(item=list())
+  expect_true(is.na(.select_year(test_item_empty)))
+
+  # Item with issued as NULL
+  test_item_null_issued <- list(item=list(issued=NULL))
+  expect_true(is.na(.select_year(test_item_null_issued)))
+
+  # Item with issued as NA
+  test_item_na_issued <- list(item=list(issued=NA))
+  expect_true(is.na(.select_year(test_item_na_issued)))
+
+  # Valid years at boundaries
+  test_item_old <- list(item=list(issued="1900-01-01 00:00:00 UTC"))
+  expect_equal(.select_year(test_item_old), 1900)
+
+  test_item_recent <- list(item=list(issued="2024-12-31 23:59:59 UTC"))
+  expect_equal(.select_year(test_item_recent), 2024)
+
+  # Different date formats (lubridate::year should handle these)
+  test_item_date_only <- list(item=list(issued="2023-06-15"))
+  expect_equal(.select_year(test_item_date_only), 2023)
+})
+
 test_that(".select_title works", {
   test_item_1 <- list(item=list(title="This is the title"))
   test_item_2 <- list(item=list(issued="2025-03-10 20:21:47 UTC"))
   expect_equal(.select_title(test_item_1), "This is the title")
   expect_true(is.na(.select_title(test_item_2)))
+})
+
+test_that(".select_title handles edge cases", {
+  # NULL item_data
+  test_item_null <- list(item=list())
+  expect_true(is.na(.select_title(test_item_null)))
+
+  # Empty item object
+  test_item_empty <- list(item=list())
+  expect_true(is.na(.select_title(test_item_empty)))
+
+  # Item with title as NULL
+  test_item_null_title <- list(item=list(title=NULL))
+  expect_true(is.na(.select_title(test_item_null_title)))
+
+  # Item with title as NA
+  test_item_na_title <- list(item=list(title=NA))
+  expect_true(is.na(.select_title(test_item_na_title)))
+
+  # Empty string vs missing - empty string should be returned
+  test_item_empty_string <- list(item=list(title=""))
+  expect_equal(.select_title(test_item_empty_string), "")
+
+  # Very long title
+  long_title <- paste(rep("word", 100), collapse=" ")
+  test_item_long <- list(item=list(title=long_title))
+  expect_equal(.select_title(test_item_long), long_title)
+
+  # Special characters in title
+  test_item_special <- list(item=list(title="COVID-19: A Review of SARS-CoV-2"))
+  expect_equal(.select_title(test_item_special), "COVID-19: A Review of SARS-CoV-2")
+
+  # Unicode characters
+  test_item_unicode <- list(item=list(title="Café: A Study of Naïve Methods"))
+  expect_equal(.select_title(test_item_unicode), "Café: A Study of Naïve Methods")
+
+  # Whitespace handling
+  test_item_whitespace <- list(item=list(title="  Title with spaces  "))
+  expect_equal(.select_title(test_item_whitespace), "  Title with spaces  ")
 })
 
 # lapply filters work on lists of lists
