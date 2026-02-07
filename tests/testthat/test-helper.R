@@ -554,3 +554,201 @@ test_that(".rename_element preserves list structure and values", {
   expect_equal(names(result), c("first", "SECOND", "third", "fourth"))
   expect_equal(unname(unlist(result)), c(1, 2, 3, 4))
 })
+
+
+# Tests for .is_internal() ----------------------------------------------------
+
+test_that(".is_internal identifies columns ending with _id", {
+  # Test various _id suffixed columns
+  test_list <- list(
+    person_id = "abc-123",
+    item_id = "def-456",
+    personlist_id = "ghi-789",
+    name = "John",
+    title = "Article"
+  )
+
+  result <- .is_internal(test_list)
+
+  # person_id, item_id, personlist_id should be internal
+  expect_true(result[1])  # person_id
+  expect_true(result[2])  # item_id
+  expect_true(result[3])  # personlist_id
+
+  # name and title should NOT be internal
+  expect_false(result[4])  # name
+  expect_false(result[5])  # title
+})
+
+test_that(".is_internal identifies special internal columns", {
+  # Test the special internal field names
+  test_list <- list(
+    position = 1,
+    object_type = "person",
+    created = Sys.time(),
+    stage = 0,
+    revision = 1,
+    regular_field = "data"
+  )
+
+  result <- .is_internal(test_list)
+
+  # All special fields should be internal
+  expect_true(result[1])  # position
+  expect_true(result[2])  # object_type
+  expect_true(result[3])  # created
+  expect_true(result[4])  # stage
+  expect_true(result[5])  # revision
+
+  # regular_field should NOT be internal
+  expect_false(result[6])
+})
+
+test_that(".is_internal correctly identifies non-internal columns", {
+  # Test with only non-internal columns
+  test_list <- list(
+    name = "John",
+    title = "Professor",
+    age = 45,
+    department = "Biology",
+    email = "john@example.com"
+  )
+
+  result <- .is_internal(test_list)
+
+  # All should be non-internal
+  expect_false(result[1])
+  expect_false(result[2])
+  expect_false(result[3])
+  expect_false(result[4])
+  expect_false(result[5])
+
+  # Verify all are FALSE
+  expect_true(all(result == FALSE))
+})
+
+test_that(".is_internal respects keep parameter", {
+  # Test that keep parameter prevents fields from being marked as internal
+  test_list <- list(
+    person_id = "abc-123",
+    item_id = "def-456",
+    stage = 0,
+    revision = 1,
+    name = "John"
+  )
+
+  # Without keep, person_id, item_id, stage, revision are internal
+  result_no_keep <- .is_internal(test_list)
+  expect_true(result_no_keep[1])   # person_id
+  expect_true(result_no_keep[2])   # item_id
+  expect_true(result_no_keep[3])   # stage
+  expect_true(result_no_keep[4])   # revision
+  expect_false(result_no_keep[5])  # name
+
+  # With keep=c("person_id"), person_id should NOT be internal
+  result_keep_person <- .is_internal(test_list, keep=c("person_id"))
+  expect_false(result_keep_person[1])  # person_id (kept)
+  expect_true(result_keep_person[2])   # item_id
+  expect_true(result_keep_person[3])   # stage
+  expect_true(result_keep_person[4])   # revision
+  expect_false(result_keep_person[5])  # name
+
+  # With keep=c("stage", "revision"), those should NOT be internal
+  result_keep_both <- .is_internal(test_list, keep=c("stage", "revision"))
+  expect_true(result_keep_both[1])   # person_id
+  expect_true(result_keep_both[2])   # item_id
+  expect_false(result_keep_both[3])  # stage (kept)
+  expect_false(result_keep_both[4])  # revision (kept)
+  expect_false(result_keep_both[5])  # name
+
+  # With keep=c("item_id", "stage"), both should NOT be internal
+  result_keep_mixed <- .is_internal(test_list, keep=c("item_id", "stage"))
+  expect_true(result_keep_mixed[1])   # person_id
+  expect_false(result_keep_mixed[2])  # item_id (kept)
+  expect_false(result_keep_mixed[3])  # stage (kept)
+  expect_true(result_keep_mixed[4])   # revision
+  expect_false(result_keep_mixed[5])  # name
+})
+
+test_that(".is_internal handles edge cases", {
+  # Empty list
+  empty_list <- list()
+  result_empty <- .is_internal(empty_list)
+  expect_equal(length(result_empty), 0)
+  expect_true(is.logical(result_empty))
+
+  # List with only internal fields
+  all_internal <- list(
+    person_id = "123",
+    item_id = "456",
+    stage = 0,
+    revision = 1,
+    created = Sys.time()
+  )
+  result_all_internal <- .is_internal(all_internal)
+  expect_true(all(result_all_internal))
+
+  # Single element list
+  single_internal <- list(person_id = "123")
+  result_single <- .is_internal(single_internal)
+  expect_equal(length(result_single), 1)
+  expect_true(result_single[1])
+
+  single_non_internal <- list(name = "John")
+  result_single_non <- .is_internal(single_non_internal)
+  expect_equal(length(result_single_non), 1)
+  expect_false(result_single_non[1])
+})
+
+test_that(".is_internal works with mixed internal and non-internal fields", {
+  # Realistic example mimicking database object
+  test_object <- list(
+    person_id = "abc-123",
+    revision = 2,
+    stage = 0,
+    created = Sys.time(),
+    object_type = "person",
+    primary_given_names = "Jane",
+    surnames = "Doe",
+    other_given_names = "Marie",
+    orcid = "0000-0001-2345-6789"
+  )
+
+  result <- .is_internal(test_object)
+
+  # Internal fields
+  expect_true(result[1])  # person_id
+  expect_true(result[2])  # revision
+  expect_true(result[3])  # stage
+  expect_true(result[4])  # created
+  expect_true(result[5])  # object_type
+
+  # Non-internal fields
+  expect_false(result[6])  # primary_given_names
+  expect_false(result[7])  # surnames
+  expect_false(result[8])  # other_given_names
+  expect_false(result[9])  # orcid
+
+  # Count: 5 internal, 4 non-internal
+  expect_equal(sum(result), 5)
+  expect_equal(sum(!result), 4)
+})
+
+test_that(".is_internal handles fields that contain but don't end with _id", {
+  # Test fields that contain "_id" but don't end with it
+  test_list <- list(
+    person_id = "123",           # Should be internal (ends with _id)
+    person_id_type = "orcid",    # Should NOT be internal (doesn't end with _id)
+    valid_identifier = "abc",    # Should NOT be internal (contains "id" but not "_id")
+    item_identifier = "def",     # Should NOT be internal
+    stage = 0                    # Should be internal
+  )
+
+  result <- .is_internal(test_list)
+
+  expect_true(result[1])   # person_id (ends with _id)
+  expect_false(result[2])  # person_id_type (doesn't end with _id)
+  expect_false(result[3])  # valid_identifier (no _id)
+  expect_false(result[4])  # item_identifier (no _id at end)
+  expect_true(result[5])   # stage (special field)
+})
