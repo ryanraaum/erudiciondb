@@ -3,6 +3,40 @@
 
 AUGMENTORS <- list()
 
+#' Augment person object with computed fields
+#'
+#' Enriches person data with ASCII name variants, referents for display, and
+#' sorting referent for alphabetization. Most complex augmentor function.
+#'
+#' @param new_p Person object (list with person fields)
+#'
+#' @return Person object with computed fields filled in
+#'
+#' @details
+#' Computes fields if not already provided:
+#'
+#' **ASCII variants** (for fuzzy matching):
+#' - `ascii_given_names`: Lowercase ASCII transliteration of combined primary + other given names
+#' - `ascii_surnames`: Lowercase ASCII transliteration of surnames (excludes particles)
+#'
+#' **Referents** (for display):
+#' - `short_referent`: Primary given names only (e.g., "Jean-Paul")
+#' - `long_referent`: Full name with all components in order:
+#'   prefix, primary given names, initials of other given names, particles, surnames, suffix
+#'   (e.g., "Dr. Jean-Paul M. de Martínez, Jr.")
+#' - `sorting_referent`: Lowercase ASCII surname with non-dropping particle
+#'   (e.g., "de martinez" for "Martínez")
+#'
+#' **Flags**:
+#' - `also_known_as`: Defaults to FALSE
+#' - `comma_suffix`: Defaults to FALSE (controls comma before suffix in long_referent)
+#'
+#' @note
+#' Sorting referent handles mononyms (people with only given names) by using
+#' primary given name as sort key. Non-dropping particles are included in sort
+#' (e.g., "de Gaulle" sorts under "D"), but dropping particles are not.
+#'
+#' @keywords internal
 .augment_person <- function(new_p) {
   if (is.na(new_p$also_known_as)) {
     new_p$also_known_as <- FALSE
@@ -58,6 +92,21 @@ AUGMENTORS <- list()
 }
 AUGMENTORS[["person"]] <- .augment_person
 
+#' Augment person_identifier with uppercase variant
+#'
+#' Creates normalized uppercase version of identifier value for case-insensitive
+#' searching.
+#'
+#' @param new_pid Person identifier object (list)
+#'
+#' @return Person identifier with id_value_uppercase computed
+#'
+#' @details
+#' If id_value_uppercase is not already set and id_value exists, computes
+#' id_value_uppercase = toupper(id_value). Used for case-insensitive matching
+#' in `.find_person_identifier()`.
+#'
+#' @keywords internal
 .augment_person_identifier <- function(new_pid) {
   if (is.na(new_pid$id_value_uppercase) && aidr::this_exists(new_pid$id_value)) {
     new_pid$id_value_uppercase <- toupper(new_pid$id_value)

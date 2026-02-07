@@ -2,5 +2,11 @@
 
 export(ErudicionDB)
 export(edb_create_tables)
+export(is_sqlite_connection)
+export(make_testcon)
+export(make_testdbobj)
+export(make_testpool)
+export(supported_databases)
+export(table_columns)
 importFrom(rlang,":=")
 importFrom(rlang,.data)

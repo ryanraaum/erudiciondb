@@ -2,9 +2,40 @@
 
 ## ------ common functions
 
-# object kind-of exists (i.e. there is a list that has some of the object values),
-#   but all properties have not been filled out and it has not been validated;
-#   so need to tell the function what kind of object to fill out and validate
+#' Create new database object with validation and augmentation
+#'
+#' Takes a partial object specification, fills in missing fields with NA, generates
+#' IDs and metadata, then runs validation and augmentation functions. This is the
+#' entry point for all object creation in ErudicionDB.
+#'
+#' @param connection Database connection or pool
+#' @param object_type Type of object (singular form: "item", "person", etc.)
+#' @param object List containing object data (partial or complete)
+#' @param validate_function Optional validation function to check object integrity
+#' @param augment_function Optional augmentation function to enrich object data
+#' @param stage Activation stage (0 = active, -1 = inactive, default: 0)
+#'
+#' @return List containing the complete, validated, and augmented object with:
+#'   - All table columns present (missing fields filled with NA)
+#'   - Generated UUID for object_id
+#'   - object_type field set
+#'   - revision set to 1
+#'   - stage set to specified value
+#'
+#' @details
+#' The function follows the validator-augmentor pattern:
+#' 1. Validates all provided fields exist in the target table schema
+#' 2. Fills missing fields with NA based on table schema
+#' 3. Adds metadata: object_type, UUID, revision (1), stage
+#' 4. Runs validator function (if provided) - throws error on failure
+#' 5. Runs augmentor function (if provided) - transforms/enriches data
+#'
+#' @note
+#' Object is NOT inserted into database - use `.insert_one()` or
+#' `.insert_new_object()` for that. The object_type field must match a valid
+#' table name (pluralized: "items", "persons", etc.).
+#'
+#' @keywords internal
 .new_object <- function(connection, object_type, object,
                         validate_function=NULL,
                         augment_function=NULL,
@@ -39,6 +70,28 @@
   }
 }
 
+#' Calculate next revision number for an object
+#'
+#' Finds the maximum existing revision number for an object and returns the next
+#' sequential revision number. Used when creating new revisions during updates.
+#'
+#' @param connection Database connection or pool
+#' @param object_type Type of object (singular form: "item", "person", etc.)
+#' @param object_id UUID of the object
+#'
+#' @return Integer: the next available revision number (max existing revision + 1)
+#'
+#' @details
+#' This function queries all revisions of an object (across all stages) to find
+#' the maximum revision number, then increments it. Throws an error if the object
+#' does not exist in the database.
+#'
+#' @note
+#' Will throw an error if object_id not found. This is part of the revision
+#' tracking system where each update creates a new revision rather than modifying
+#' in place.
+#'
+#' @keywords internal
 .next_revision <- function(connection, object_type, object_id) {
   object_table <- glue::glue("{object_type}s")
   object_id_name <- glue::glue("{object_type}_id")
@@ -53,6 +106,32 @@
   max(revisions) + 1
 }
 
+#' Create new revision of an object with updated fields
+#'
+#' Takes an existing object and specified field updates, creates a new revision
+#' with the changes. Does NOT insert to database - only prepares the revised object.
+#'
+#' @param connection Database connection or pool
+#' @param this_object The current object (must have object_type and object_id fields)
+#' @param ... Named parameters with field updates (e.g., title = "New Title")
+#'
+#' @return List containing the revised object with:
+#'   - Specified fields updated to new values
+#'   - revision incremented to next available number
+#'   - All other fields unchanged from original
+#'
+#' @details
+#' Only updates fields that exist in the table schema and are provided in `...`.
+#' The object_id field cannot be updated. Uses `.update_it()` helper to safely
+#' replace values (preserving existing if new is NULL). The new revision number
+#' is calculated via `.next_revision()`.
+#'
+#' @note
+#' This function only prepares the revised object - it does NOT insert it to the
+#' database or destage the old revision. Use `.update_object()` for the complete
+#' update workflow with transaction safety.
+#'
+#' @keywords internal
 .revise_object <- function(connection, this_object, ...) {
   object_type <- this_object$object_type
   if (!aidr::this_exists(object_type)) {
@@ -80,9 +159,35 @@
   updated_object
 }
 
-# "update" = *revise* and then *insert* object into database
-# - in this process, will also deactivate (stage = -1) current object in db
-# - destage before insert to prevent race condition where two revisions have stage=0
+#' Update an object by creating and inserting a new revision
+#'
+#' Complete update workflow: revise object, destage old revision, insert new revision.
+#' All operations wrapped in a database transaction for atomicity.
+#'
+#' @param connection Database connection (not pool - must support transactions)
+#' @param this_object The current object to update (must exist in database)
+#' @param ... Named parameters with field updates (e.g., title = "New Title")
+#'
+#' @return UUID of the updated object (same as input object_id)
+#'
+#' @details
+#' This function implements the complete revision tracking workflow:
+#' 1. Create revised object with `.revise_object()` (increments revision)
+#' 2. Start database transaction
+#' 3. **CRITICAL:** Destage old revision FIRST (stage = -1) via `.destage_one()`
+#' 4. Insert new revision (stage = 0) via `.insert_one()`
+#' 5. Commit transaction (or rollback on error)
+#'
+#' The transaction ensures atomicity - either both operations succeed or neither does.
+#'
+#' @note
+#' **CRITICAL ORDERING:** `.destage_one()` MUST be called BEFORE `.insert_one()`
+#' to prevent a race condition where two revisions temporarily have stage=0
+#' (active) simultaneously. This could lead to duplicate active revisions if the
+#' transaction is interrupted between operations. The ordering ensures at most
+#' one active revision exists at any point in time.
+#'
+#' @keywords internal
 .update_object <- function(connection, this_object, ...) {
   revised_object <- .revise_object(connection, this_object, ...)
   DBI::dbBegin(connection)
@@ -100,7 +205,32 @@
   revised_object_id
 }
 
-# object exists and has been validated, so `object_type` is set in the object
+#' Insert a validated object into the database
+#'
+#' Inserts a complete, validated object into its corresponding database table.
+#' Expects object to have been created by `.new_object()` or `.revise_object()`.
+#'
+#' @param connection Database connection or pool
+#' @param object List containing complete object (must have object_type field)
+#'
+#' @return UUID of the inserted object
+#'
+#' @details
+#' The function:
+#' 1. Extracts object_type to determine target table
+#' 2. Filters out NA values (only inserts non-empty fields)
+#' 3. Removes metadata object_type field (not stored in tables)
+#' 4. Constructs SQL INSERT statement with glue_sql escaping
+#' 5. Executes insertion and returns object UUID
+#'
+#' Uses `glue::glue_sql()` for SQL injection protection - all values are properly
+#' escaped based on database connection type.
+#'
+#' @note
+#' Object must be pre-validated and complete. Does not run validation or
+#' augmentation - use `.insert_new_object()` if you need those steps.
+#'
+#' @keywords internal
 .insert_one <- function(connection, object) {
   object_type <- object$object_type
   table_name <- glue::glue("{object_type}s")
@@ -114,6 +244,32 @@
   object[[object_id]]
 }
 
+#' Create and insert a new object in one operation
+#'
+#' Convenience wrapper that combines `.new_object()` and `.insert_one()` into a
+#' single operation for common object creation workflow.
+#'
+#' @param connection Database connection or pool
+#' @param object_type Type of object (singular form: "item", "person", etc.)
+#' @param object List containing object data (partial or complete)
+#' @param validate_function Optional validation function to check object integrity
+#' @param augment_function Optional augmentation function to enrich object data
+#' @param stage Activation stage (0 = active, -1 = inactive, default: 0)
+#'
+#' @return UUID of the inserted object
+#'
+#' @details
+#' Equivalent to calling:
+#' ```r
+#' new_obj <- .new_object(connection, object_type, object, validate_function, augment_function, stage)
+#' .insert_one(connection, new_obj)
+#' ```
+#'
+#' This is the standard way to create and insert simple objects. For items with
+#' creators (which require personlists and item_persons), use the full
+#' `ErudicionDB$insert_new_object()` method instead.
+#'
+#' @keywords internal
 .insert_new_object <- function(connection, object_type, object,
                                validate_function=NULL,
                                augment_function=NULL,
@@ -125,7 +281,30 @@
   .insert_one(connection, new_object)
 }
 
-# object exists in the database
+#' Deactivate an object revision by setting stage to -1
+#'
+#' Marks a specific revision of an object as inactive (stage = -1). Used as part
+#' of the update workflow to preserve audit trail while activating a new revision.
+#'
+#' @param connection Database connection or pool
+#' @param object The object to deactivate (must have object_type, object_id, and revision)
+#'
+#' @return Logical: TRUE if exactly one row was updated, FALSE otherwise
+#'
+#' @details
+#' Updates the stage field from 0 (active) to -1 (inactive) for the specified
+#' object revision. The WHERE clause matches on both object_id AND revision to
+#' ensure only the intended revision is affected.
+#'
+#' Old revisions are kept with stage=-1 for audit trail purposes rather than being
+#' deleted. This preserves the complete history of all changes to an object.
+#'
+#' @note
+#' Part of the revision tracking system. Typically called by `.update_object()`
+#' as part of a transaction. Returns FALSE if no rows matched (object not found
+#' or already destaged).
+#'
+#' @keywords internal
 .destage_one <- function(connection, object) {
   # Validate required fields
   if (!("object_type" %in% names(object)) || is.null(object$object_type)) {
@@ -151,11 +330,32 @@
 }
 
 
-# which revision to retrieve?
-# NOTE that this choice is applied AFTER the `stage` filter
-# - "max" (default) for only the most recent for the selected stage
-# - "all" for all revisions at the selected stage
-# - <number> to select a particular revision (that will need to exist at the selected stage)
+#' Generate revision filter function for dplyr pipelines
+#'
+#' Creates a filter function that can be applied to select specific revisions
+#' from query results. Used after stage filtering in retrieval operations.
+#'
+#' @param rev Revision selector:
+#'   - "max" (default): Return only the most recent revision
+#'   - "all": Return all revisions (no filtering)
+#'   - <number>: Return specific revision number
+#'
+#' @return Function that takes a data frame (.data) and returns filtered data frame
+#'
+#' @details
+#' This function returns a closure that can be applied in dplyr pipelines:
+#' - "max" returns a function that uses `slice_max()` on revision column
+#' - "all" returns a function that returns all rows (filter(TRUE))
+#' - Numeric value returns a function that filters to that specific revision
+#'
+#' The filter is applied AFTER the stage filter in retrieval queries, meaning
+#' it operates on the subset of rows already filtered by stage.
+#'
+#' @note
+#' Used internally by `.retrieve()` and `.find()` to handle the revision parameter.
+#' The returned function is called immediately in a pipeline via `()`.
+#'
+#' @keywords internal
 .make_revision_filter <- function(rev) {
   this_filter <- function(.data) { dplyr::filter(.data, .data$revision == rev) }
   if (rev == "max") {
@@ -166,9 +366,38 @@
   this_filter
 }
 
-# object exists in the database, but will only exist here after it is pulled
-#   so need to tell the function what kind of object to pull from the db
-# `by` for searching by something other than the core object id
+#' Retrieve objects from database by ID or other column
+#'
+#' Retrieves one or more objects from the database by their ID (or alternative
+#' column), with filtering by stage and revision.
+#'
+#' @param connection Database connection or pool
+#' @param object_type Type of object (singular form: "item", "person", etc.)
+#' @param object_id Value(s) to search for (can be vector for multiple objects)
+#' @param stage Activation stage filter (0 = active, -1 = inactive, default: 0)
+#' @param revision Revision filter ("max" = latest, "all" = all, or specific number)
+#' @param by Column name to search on instead of object_id (default: NULL)
+#' @param as_list Return as list format (TRUE, default) or data frame (FALSE)
+#'
+#' @return If as_list=TRUE: list of objects (each as a list). If as_list=FALSE: data frame
+#'
+#' @details
+#' Query pipeline:
+#' 1. Filter by specified column (object_id by default, or `by` parameter)
+#' 2. Filter by stage (only active/inactive as specified)
+#' 3. Filter by revision (latest, all, or specific number via `.make_revision_filter()`)
+#' 4. Collect from database and add object_type field
+#' 5. Convert to list format (if as_list=TRUE)
+#'
+#' Can retrieve multiple objects by passing a vector to object_id parameter.
+#' The `by` parameter allows searching on alternative columns (e.g., by="orcid"
+#' to retrieve persons by ORCID).
+#'
+#' @note
+#' Stage filter is applied BEFORE revision filter. This means revision="max"
+#' returns the latest revision AT the specified stage, not the latest overall.
+#'
+#' @keywords internal
 .retrieve <- function(connection, object_type, object_id,
                       stage=0, revision="max",
                       by=NULL, as_list=TRUE) {
@@ -198,6 +427,31 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
                                found_by = character(0),
                                similarity = numeric(0))
 
+#' Find items by external identifiers (DOI, PMID, PMCID)
+#'
+#' Searches for items matching any of the provided external identifiers using
+#' case-insensitive LIKE matching.
+#'
+#' @param connection Database connection or pool
+#' @param doi Digital Object Identifier (optional)
+#' @param pmid PubMed ID (optional)
+#' @param pmcid PubMed Central ID (optional)
+#'
+#' @return Data frame with columns: item_id, stage, revision, similarity (1), found_by ("identifier")
+#'
+#' @details
+#' Builds a SQL query with OR'd WHERE clauses for each provided identifier:
+#' - **SQLite**: Uses LIKE for case-insensitive matching
+#' - **DuckDB**: Uses ILIKE for case-insensitive matching
+#'
+#' All provided identifiers are OR'd together - any match succeeds. Returns all
+#' matching items with similarity=1 (exact match) and found_by="identifier".
+#'
+#' @note
+#' Returns empty tibble if no identifiers provided or no matches found. This is
+#' the first (highest priority) search strategy in `.find()` for items.
+#'
+#' @keywords internal
 .find_item_by_identifier <- function(connection, doi=NULL, pmid=NULL, pmcid=NULL) {
   result_df <- EMPTY_FIND_RESULT
   identifiers <- list(doi=doi, pmid=pmid, pmcid=pmcid)
@@ -223,6 +477,32 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+#' Find items by citation metadata (year, volume, first page)
+#'
+#' Searches for items matching all three citation components: publication year,
+#' journal volume, and first page number.
+#'
+#' @param connection Database connection or pool
+#' @param year Publication year (integer)
+#' @param volume Journal volume (string)
+#' @param first_page First page number (string)
+#'
+#' @return Data frame with columns: item_id, stage, revision, similarity (1), found_by ("year_volume_page")
+#'
+#' @details
+#' All three parameters are required - returns empty result if any are missing.
+#' Extracts year from the issued date field using database-specific functions:
+#' - **SQLite**: Uses `strftime('%Y', issued)` for date extraction, LIKE for matching
+#' - **DuckDB**: Uses `year(issued)` function, ILIKE for matching
+#'
+#' All three criteria must match (AND'd together) for an item to be returned.
+#'
+#' @note
+#' This is the second search strategy in `.find()` for items (after identifier
+#' search fails). Particularly useful for finding items from older publications
+#' that lack DOIs.
+#'
+#' @keywords internal
 .find_item_by_year_volume_page <- function(connection, year, volume, first_page) {
   result_df <- EMPTY_FIND_RESULT
   if (aidr::this_exists(year) && aidr::this_exists(volume) && aidr::this_exists(first_page)) {
@@ -249,6 +529,32 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+#' Find items by fuzzy title matching
+#'
+#' Searches for items with similar titles using Jaro-Winkler similarity metric,
+#' with different implementations for SQLite (R-based) vs DuckDB (SQL-based).
+#'
+#' @param connection Database connection or pool
+#' @param title Title string to search for
+#'
+#' @return Data frame with columns: item_id, stage, revision, similarity, found_by
+#'
+#' @details
+#' Uses Jaro-Winkler similarity to find fuzzy title matches:
+#' - Compares lowercased search title to substring of database titles (same length)
+#' - **SQLite**: Pulls all items and computes similarity in R using stringdist package
+#' - **DuckDB**: Uses SQL `jaro_winkler_similarity()` function with WHERE filter
+#' - Threshold: similarity ≥ 0.9 (only for DuckDB; SQLite returns all, caller filters)
+#'
+#' The substring comparison ensures we're comparing equal-length strings, which
+#' is important for Jaro-Winkler accuracy.
+#'
+#' @note
+#' SQLite version pulls entire items table into memory for similarity calculation,
+#' which may be slow for large databases. DuckDB version is more efficient as it
+#' filters in the database. Both return found_by = "title".
+#'
+#' @keywords internal
 .find_item_by_title <- function(connection, title) {
   result_df <- EMPTY_FIND_RESULT
 
@@ -286,6 +592,31 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+#' Find items associated with a focal person
+#'
+#' Searches for all items that have a specific focal person as a creator/contributor,
+#' by joining through personlists and item_persons tables.
+#'
+#' @param connection Database connection or pool
+#' @param person_id UUID of the focal person to search for
+#'
+#' @return Data frame with columns: item_id, stage, revision, similarity (1), found_by ("person_id")
+#'
+#' @details
+#' Performs a three-way join to find items linked to a person:
+#' 1. items LEFT JOIN personlists (one item can have multiple personlists)
+#' 2. LEFT JOIN item_persons (each personlist entry links to a person)
+#' 3. Filter where person_id matches the search value
+#' 4. Return unique item_ids with full item data
+#'
+#' This allows finding items where a focal person is listed as an author, editor,
+#' or any other creator role.
+#'
+#' @note
+#' This is the fourth search strategy in `.find()` for items. Only searches for
+#' focal persons (those in the persons table), not all item_persons.
+#'
+#' @keywords internal
 .find_item_by_person <- function(connection, person_id) {
   result_df <- fetched_results <- EMPTY_FIND_RESULT
   this_person_id <- person_id
@@ -312,6 +643,37 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+#' Find person identifiers using flexible search strategies
+#'
+#' Searches person_identifiers table using one of three strategies based on which
+#' fields are provided in the search object.
+#'
+#' @param connection Database connection or pool
+#' @param object_data List containing search criteria (id_value, id_type, and/or person_id)
+#'
+#' @return Data frame with person_identifier records plus similarity (1) and found_by columns
+#'
+#' @details
+#' Uses three prioritized search strategies (stops at first match):
+#'
+#' 1. **By id_value**: If id_value provided, match on uppercased id_value_uppercase
+#'    (found_by = "identifier"). Most specific search.
+#'
+#' 2. **By id_type + person_id**: If both provided, match on exact combination
+#'    (found_by = "person_and_type"). Useful for checking if a specific person
+#'    has a specific type of identifier.
+#'
+#' 3. **By person_id only**: If only person_id provided, return all identifiers
+#'    for that person (found_by = "person_id").
+#'
+#' All matches return similarity=1 (exact match).
+#'
+#' @note
+#' The id_value_uppercase field stores normalized (uppercased) identifier values
+#' for case-insensitive matching. Used by `.find()` when searching for person_identifier
+#' objects.
+#'
+#' @keywords internal
 .find_person_identifier <- function(connection, object_data) {
   found <- tibble::tibble()
   id_value_uppercase <- id_type <- person_id <- NULL # to silence `check()`
@@ -343,6 +705,40 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   found
 }
 
+#' Find objects using hierarchical search strategies
+#'
+#' Attempts to find matching objects in the database using multiple search strategies
+#' in priority order, with specialized logic for items and person_identifiers.
+#'
+#' @param connection Database connection or pool
+#' @param object_type Type of object (singular form: "item", "person_identifier", etc.)
+#' @param object_data List containing search criteria (fields to match)
+#' @param stage Activation stage filter (0 = active, -1 = inactive, default: 0)
+#' @param revision Revision filter ("max" = latest, "all" = all, or specific number)
+#'
+#' @return Data frame with matching objects plus similarity and found_by columns
+#'
+#' @details
+#' **For items**, uses hierarchical search (stops at first match):
+#' 1. By identifier (DOI, PMID, PMCID) via `.find_item_by_identifier()`
+#' 2. By year/volume/first_page via `.find_item_by_year_volume_page()`
+#' 3. By title (Jaro-Winkler similarity ≥ 0.9) via `.find_item_by_title()`
+#' 4. By associated person_id via `.find_item_by_person()`
+#' 5. Fallback: Inner join on all provided fields
+#'
+#' **For person_identifiers**, uses `.find_person_identifier()` with three strategies.
+#'
+#' **For other object types**, uses direct inner join on all provided fields.
+#'
+#' Results include:
+#' - `similarity`: Numeric similarity score (1.0 for exact matches, <1.0 for fuzzy)
+#' - `found_by`: String indicating which search strategy succeeded
+#'
+#' @note
+#' Stage and revision filters applied AFTER search strategies run. Returns empty
+#' tibble if no matches found. Each search function defines what constitutes a match.
+#'
+#' @keywords internal
 .find <- function(connection, object_type, object_data,
                   stage = 0, revision = "max") {
 
@@ -402,6 +798,27 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   found
 }
 
+#' Check if a citation key already exists in the database
+#'
+#' Queries the items table to determine if a citation key is already in use,
+#' used during citation key generation to ensure uniqueness.
+#'
+#' @param connection Database connection or pool
+#' @param citekey Citation key string to check
+#'
+#' @return Logical: TRUE if citekey exists, FALSE otherwise
+#'
+#' @details
+#' Performs a simple SELECT query for the citation_key. Returns TRUE if any rows
+#' are found, FALSE if none. Used by the citation key generation algorithm in
+#' `insert_new_item()` to avoid collisions.
+#'
+#' @note
+#' Part of the citation key uniqueness workflow. If collision detected, the
+#' generation algorithm adds numeric suffixes (e.g., Smith2020Example1) until
+#' a unique key is found.
+#'
+#' @keywords internal
 .citekey_exists_in_db <- function(connection, citekey) {
   count_query <- glue::glue_sql("SELECT citation_key FROM items WHERE citation_key = {citekey}", .con = connection)
   count_result <- DBI::dbGetQuery(connection, count_query)
@@ -410,10 +827,41 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   this_count > 0
 }
 
-# find "person" from imported item person data
-# - `pdata` is a list; relevant elements are `family`, `given`, `orcid`, and `literal`
-#    (entries with a `literal` value and no `family` or `given` are institutional authors;
-#       institutional authors will not be matched - persons table is only actual people)
+#' Match item_person data to focal persons using hierarchical strategies
+#'
+#' Attempts to match a person from imported bibliography data (item_person) to an
+#' existing focal person in the persons table using four prioritized matching strategies.
+#'
+#' @param connection Database connection or pool
+#' @param pdata List with person data containing: family, given, orcid (optional), literal (optional)
+#' @param only_most_recent Use only latest revision of persons (default: TRUE)
+#' @param only_active_stage Use only active persons (stage=0) (default: TRUE)
+#'
+#' @return Data frame with matched person(s) plus similarity and found_by columns,
+#'   or empty data frame if no match
+#'
+#' @details
+#' **Hierarchical matching algorithm** (stops at first match):
+#'
+#' 1. **ORCID exact match**: If pdata has orcid, match on orcid field (found_by = "orcid")
+#' 2. **Full name exact match**: Match primary_given_names + surnames, or ASCII variants
+#'    (found_by = "full_name_match")
+#' 3. **Initials + surname match**: Match initials extracted from given name plus surname,
+#'    checking both primary and ASCII variants (found_by = "initials_match")
+#' 4. **Approximate name match**: Fuzzy match using Jaro-Winkler distance on first word
+#'    of given name + surname, threshold < 0.05 distance (found_by = "approximate_name_match")
+#'
+#' All exact matches return similarity=1.0. Approximate matches return
+#' similarity = 1 - mean(given_distance, family_distance).
+#'
+#' @note
+#' - Only matches actual people - institutional authors (literal without family/given) return NULL
+#' - Requires at least family OR given name to attempt matching
+#' - Pulls full persons table into memory (assumes small size for intended use cases)
+#' - ASCII transliteration handles accented characters (e.g., José → jose)
+#' - If multiple persons match, all are returned (caller handles ambiguity)
+#'
+#' @keywords internal
 .match_person <- function(connection, pdata, only_most_recent = TRUE, only_active_stage = TRUE) {
   # stop check warnings
   person_id <- revision <- stage <- orcid <- primary_given_names <- NULL
@@ -534,6 +982,31 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 
+#' Get bibliography items for a focal person
+#'
+#' Finds all items associated with a focal person (via item_persons → personlists)
+#' and enriches them with creator data for bibliography generation.
+#'
+#' @param connection Database connection or pool
+#' @param person_id UUID of the focal person
+#'
+#' @return Data frame with items and their associated creators (via `.item_ids_to_biblio_items()`)
+#'
+#' @details
+#' This is the first step in the person bibliography workflow:
+#' 1. Find item_persons entries linking to this person_id (stage=0 only)
+#' 2. Join to personlists to get associated item_ids
+#' 3. Get distinct item_ids
+#' 4. Pass to `.item_ids_to_biblio_items()` for enrichment
+#'
+#' Only returns active (stage=0) associations. The resulting data frame includes
+#' full item data plus list-columns for each personlist_type (author, editor, etc.).
+#'
+#' @note
+#' Used as entry point for generating a focal person's bibliography. Chains to
+#' `.item_ids_to_biblio_items()` → `.items_to_biblio_items()` for full enrichment.
+#'
+#' @keywords internal
 .person_id_to_biblio_items <- function(connection, person_id) {
   result_df <- fetched_results <- tibble::tibble()
   # following to avoid check() notes
@@ -564,6 +1037,36 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 }
 
 
+#' Convert item IDs to enriched bibliography items
+#'
+#' Takes item IDs (as data frame, character vector, or UUIDs), retrieves items
+#' from database, and enriches with creator data for bibliography generation.
+#'
+#' @param connection Database connection or pool
+#' @param item_ids Item IDs in one of three formats:
+#'   - Data frame with "item_id" column
+#'   - Character vector of UUIDs
+#'   - UUID vector (converted to character)
+#'
+#' @return Data frame with items and creator list-columns (via `.items_to_biblio_items()`)
+#'
+#' @details
+#' Workflow:
+#' 1. Normalize item_ids to data frame format
+#' 2. Check out connection from pool (for copy=TRUE join safety)
+#' 3. Right join items table to item_ids (active stage=0 only)
+#' 4. Filter out non-existent items (NA revision from right join)
+#' 5. Pass to `.items_to_biblio_items()` for creator enrichment
+#' 6. Return connection to pool
+#'
+#' UUIDs are converted to character for database compatibility (stored as VARCHAR).
+#'
+#' @note
+#' Middle step in bibliography pipeline. Chains from `.person_id_to_biblio_items()`
+#' and chains to `.items_to_biblio_items()`. Uses poolCheckout/poolReturn for
+#' transaction safety.
+#'
+#' @keywords internal
 .item_ids_to_biblio_items <- function(connection, item_ids) {
   result_df <- fetched_results <- tibble::tibble()
   # following to avoid check() notes
@@ -599,6 +1102,36 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
 
 
+#' Enrich items with creator data for bibliography generation
+#'
+#' Takes a data frame of items and joins in all associated creator data from
+#' personlists and item_persons, organized by personlist_type (author, editor, etc.).
+#'
+#' @param connection Database connection or pool
+#' @param items Data frame of item records (from database)
+#'
+#' @return Data frame with original items plus list-columns for each personlist_type
+#'
+#' @details
+#' Complex enrichment workflow:
+#' 1. Extract just item_ids from items data frame
+#' 2. Join personlists to get personlist metadata (type, id)
+#' 3. Group personlists by personlist_type (author, editor, etc.)
+#' 4. For each type, join item_persons to get creator details
+#' 5. Group item_persons by item_id within each type
+#' 6. Create list-columns containing creator data frames for each item+type
+#' 7. Full join all type-specific data back together
+#' 8. Left join to original items to preserve all item data
+#'
+#' Result has structure: items table columns + list-columns named by personlist_type
+#' (e.g., `author` column contains data frame of authors for each item).
+#'
+#' @note
+#' Uses multiple poolCheckout/poolReturn cycles for each personlist_type join.
+#' Handles empty personlists gracefully (items without creators). This is the
+#' most complex function in the bibliography pipeline.
+#'
+#' @keywords internal
 .items_to_biblio_items <- function(connection, items) {
   result_df <- fetched_results <- tibble::tibble()
   # following to avoid check notes
@@ -662,6 +1195,36 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   result_df
 }
 
+#' Convert bibliography items to CSL-compliant list structure
+#'
+#' Transforms enriched bibliography items data frame into CSL (Citation Style Language)
+#' format for export to JSON bibliography files.
+#'
+#' @param bibitems Data frame from `.items_to_biblio_items()` with item data and creator list-columns
+#'
+#' @return Named list of CSL-formatted items (names are item_ids)
+#'
+#' @details
+#' Transformation pipeline:
+#' 1. Convert date columns to character (avoid JSON epoch seconds)
+#' 2. Convert rows to list format
+#' 3. Filter out NA values via `.lapply_filter_na()`
+#' 4. Filter out internal metadata via `.lapply_filter_internal()`
+#' 5. Rename fields to CSL hyphenated format:
+#'    - citation_key → id
+#'    - container_title → container-title
+#'    - page_first → page-first
+#'    - (and 20+ other snake_case → hyphenated conversions)
+#' 6. Transform creator data via `.item_persons_to_biblio_persons()`
+#'
+#' Result is ready for `.csl_list_to_json()` export.
+#'
+#' @note
+#' Handles empty input gracefully (returns empty list). Date conversion prevents
+#' pandoc bibliography processing errors. The id field (citation_key) is used
+#' as the cite key in LaTeX/Markdown.
+#'
+#' @keywords internal
 .biblio_items_to_csl_list <- function(bibitems) {
   # Handle empty input early
   if (nrow(bibitems) == 0) { return(list()) }
@@ -719,6 +1282,34 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
 
 }
 
+#' Transform item_persons data to CSL-compliant person format
+#'
+#' Converts item_persons data frames (in list-columns) to CSL person list format,
+#' renaming fields to hyphenated CSL names and filtering metadata.
+#'
+#' @param list_item Single item from CSL list (has item data + personlist type list-columns)
+#'
+#' @return Same list_item with personlist data transformed to CSL person format
+#'
+#' @details
+#' For each personlist_type in the item (author, editor, etc.):
+#' 1. Extract the persons data frame from list-column
+#' 2. Rename optional CSL columns to hyphenated format:
+#'    - dropping_particle → dropping-particle
+#'    - non_dropping_particle → non-dropping-particle
+#'    - comma_suffix → comma-suffix
+#'    - static_ordering → static-ordering
+#'    - parse_names → parse-names
+#' 3. Arrange by position field
+#' 4. Convert each row to a list (preserving structure)
+#' 5. Filter out NAs and internal metadata (keep person_id)
+#' 6. Replace list-column with CSL person list
+#'
+#' @note
+#' Handles NULL, empty, and non-dataframe personlists gracefully. The person_id
+#' field is kept (via keep="person_id") for potential focal person tracking.
+#'
+#' @keywords internal
 .item_persons_to_biblio_persons <- function(list_item) {
   # to avoid check() notes
   position <- NULL
@@ -786,6 +1377,24 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
   list_item
 }
 
+#' Convert CSL list to JSON bibliography string
+#'
+#' Final step in bibliography pipeline: converts CSL-formatted list to JSON string
+#' suitable for export to .json bibliography files (for pandoc, LaTeX, etc.).
+#'
+#' @param csl_list Named list from `.biblio_items_to_csl_list()`
+#'
+#' @return JSON string with CSL bibliography data
+#'
+#' @details
+#' Simple wrapper around jsonlite::toJSON with appropriate settings:
+#' - Removes names (convert to unnamed array)
+#' - pretty=TRUE for readable output
+#' - auto_unbox=TRUE to prevent single values becoming arrays
+#'
+#' The resulting JSON is compatible with CSL processors like pandoc-citeproc.
+#'
+#' @keywords internal
 .csl_list_to_json <- function(csl_list) {
   names(csl_list) <- NULL
   items.json <- jsonlite::toJSON(csl_list, pretty=TRUE, auto_unbox=TRUE)
