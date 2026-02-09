@@ -92,7 +92,31 @@ R/
 ├── augmentors.R         # Data enrichment/transformation
 ├── helper.R             # Utility functions
 └── erudiciondb-package.R # Package metadata
+
+inst/
+└── sql/
+    └── common/          # SQL schema files (SQLite/DuckDB compatible)
+        ├── persons.sql
+        ├── person_roles.sql
+        ├── person_identifiers.sql
+        ├── items.sql
+        ├── personlists.sql
+        ├── item_persons.sql
+        ├── item_person_identifiers.sql
+        ├── affiliation_references.sql
+        └── issues.sql
 ```
+
+### Database Schema Files
+
+SQL table definitions are stored in `inst/sql/common/`:
+- **One file per table** (9 files total) for clarity and maintainability
+- **Pure SQL DDL** (no R code) - can be used by database tools
+- **Identical for SQLite and DuckDB** (standard SQL syntax)
+- **Loaded at runtime** by `R/create_tables.R` functions via `system.file()`
+- **Easy to review** in git diffs and text editors with SQL syntax highlighting
+
+This separation of concerns keeps SQL schemas visible and portable while R code handles orchestration.
 
 ### Key Design Patterns
 

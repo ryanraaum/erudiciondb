@@ -1,10 +1,33 @@
 
 create_table_functions <- list()
 
+#' Read SQL schema file
+#'
+#' Reads a SQL schema file from inst/sql/common/ directory.
+#'
+#' @param table_name Name of the table (e.g., "persons", "items")
+#' @return Character string containing SQL CREATE TABLE statement
+#' @keywords internal
+.read_schema_sql <- function(table_name) {
+  # inst/ directory is mapped to system.file() after package installation
+  sql_file <- system.file(
+    "sql", "common", paste0(table_name, ".sql"),
+    package = "erudiciondb",
+    mustWork = TRUE
+  )
+
+  # Read entire file as single string
+  sql <- readLines(sql_file, warn = FALSE)
+  sql <- paste(sql, collapse = "\n")
+
+  return(sql)
+}
+
 #' Create persons table
 #'
-#' Creates the persons table for focal scholars. See CLAUDE.md schema section
-#' for field descriptions.
+#' Creates the persons table for focal scholars using SQL schema from
+#' inst/sql/common/persons.sql. See CLAUDE.md schema section for field
+#' descriptions.
 #'
 #' @param con Database connection
 #'
@@ -18,40 +41,8 @@ create_table_functions <- list()
 #'
 #' @keywords internal
 .create_persons_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE persons (
-                      person_id UUID NOT NULL,
-                      primary_person_id UUID,
-                      also_known_as BOOLEAN,
-                      primary_given_names VARCHAR,
-                      other_given_names VARCHAR,
-                      ascii_given_names VARCHAR,
-                      surnames VARCHAR,
-                      ascii_surnames VARCHAR,
-                      dropping_particle VARCHAR,
-                      non_dropping_particle VARCHAR,
-                      prefix VARCHAR,
-                      suffix VARCHAR,
-                      comma_suffix BOOLEAN,
-                      short_referent VARCHAR,
-                      long_referent VARCHAR,
-                      sorting_referent VARCHAR,
-                      name_in_origin_script VARCHAR,
-                      subjective_pronoun VARCHAR,
-                      objective_pronoun VARCHAR,
-                      possessive_pronoun VARCHAR,
-                      status VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (person_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1),
-                      CHECK (
-                        (primary_given_names IS NOT NULL AND primary_given_names != '') OR
-                        (other_given_names IS NOT NULL AND other_given_names != '') OR
-                        (surnames IS NOT NULL AND surnames != '')
-                      )
-  )")
+  sql <- .read_schema_sql("persons")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$persons <- .create_persons_table
 
@@ -59,7 +50,8 @@ create_table_functions$persons <- .create_persons_table
 #' Create person_roles table
 #'
 #' Creates the person_roles table for tracking career history and affiliations
-#' of focal persons. See CLAUDE.md schema section for field descriptions.
+#' of focal persons using SQL schema from inst/sql/common/person_roles.sql.
+#' See CLAUDE.md schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -72,42 +64,17 @@ create_table_functions$persons <- .create_persons_table
 #'
 #' @keywords internal
 .create_person_roles_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE person_roles (
-                      person_role_id UUID NOT NULL,
-                      person_id UUID,
-                      position VARCHAR,
-                      superorganization VARCHAR,
-                      organization VARCHAR,
-                      suborganization VARCHAR,
-                      division VARCHAR,
-                      subdivision VARCHAR,
-                      address VARCHAR,
-                      city VARCHAR,
-                      region VARCHAR,
-                      country VARCHAR,
-                      start_year INTEGER,
-                      end_year INTEGER,
-                      start_month INTEGER,
-                      end_month INTEGER,
-                      start_day INTEGER,
-                      end_day INTEGER,
-                      order_priority INTEGER,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (person_role_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
-
+  sql <- .read_schema_sql("person_roles")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$person_roles <- .create_person_roles_table
 
 
 #' Create item_persons table
 #'
-#' Creates the item_persons table for creators/contributors from imported items.
-#' CSL-compliant schema. See CLAUDE.md schema section for field descriptions.
+#' Creates the item_persons table for creators/contributors from imported items
+#' using SQL schema from inst/sql/common/item_persons.sql. CSL-compliant schema.
+#' See CLAUDE.md schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -121,35 +88,17 @@ create_table_functions$person_roles <- .create_person_roles_table
 #'
 #' @keywords internal
 .create_item_persons_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE item_persons (
-                      item_person_id UUID NOT NULL,
-                      personlist_id UUID,
-                      position INTEGER,
-                      person_id UUID,
-                      literal VARCHAR,
-                      family VARCHAR,
-                      given VARCHAR,
-                      dropping_particle VARCHAR,
-                      non_dropping_particle VARCHAR,
-                      suffix VARCHAR,
-                      comma_suffix BOOLEAN,
-                      static_ordering BOOLEAN,
-                      parse_names BOOLEAN,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (item_person_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("item_persons")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$item_persons <- .create_item_persons_table
 
 
 #' Create personlists table
 #'
-#' Creates the personlists table linking items to their item_persons by role type.
-#' See CLAUDE.md schema section for field descriptions.
+#' Creates the personlists table linking items to their item_persons by role type
+#' using SQL schema from inst/sql/common/personlists.sql. See CLAUDE.md schema
+#' section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -161,32 +110,17 @@ create_table_functions$item_persons <- .create_item_persons_table
 #'
 #' @keywords internal
 .create_personlists_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE personlists (
-                      personlist_id UUID NOT NULL,
-                      item_id UUID,
-                      personlist_type VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (personlist_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1),
-                      CHECK (personlist_type IN (
-                        'author', 'editor', 'translator', 'director', 'performer', 'chair',
-                        'organizer', 'collection-editor', 'compiler', 'composer', 'container-author',
-                        'contributor', 'curator', 'editorial-director', 'executive-producer',
-                        'guest', 'host', 'interviewer', 'illustrator', 'narrator', 'original-author',
-                        'producer', 'recipient', 'reviewed-author', 'script-writer', 'series-creator'
-                      ))
-  )")
+  sql <- .read_schema_sql("personlists")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$personlists <- .create_personlists_table
 
 
 #' Create affiliation_references table
 #'
-#' Creates the affiliation_references table for affiliations of item creators.
-#' See CLAUDE.md schema section for field descriptions.
+#' Creates the affiliation_references table for affiliations of item creators
+#' using SQL schema from inst/sql/common/affiliation_references.sql. See
+#' CLAUDE.md schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -198,26 +132,17 @@ create_table_functions$personlists <- .create_personlists_table
 #'
 #' @keywords internal
 .create_affiliation_references_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE affiliation_references (
-                      affiliation_reference_id UUID NOT NULL,
-                      item_person_id UUID,
-                      position INTEGER,
-                      affiliation VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (affiliation_reference_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("affiliation_references")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$affiliation_references <- .create_affiliation_references_table
 
 
 #' Create items table
 #'
-#' Creates the items table for bibliography/citation records. CSL-compliant with
-#' ~70 fields. See CLAUDE.md schema section for field descriptions.
+#' Creates the items table for bibliography/citation records using SQL schema
+#' from inst/sql/common/items.sql. CSL-compliant with ~70 fields. See CLAUDE.md
+#' schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -231,98 +156,17 @@ create_table_functions$affiliation_references <- .create_affiliation_references_
 #'
 #' @keywords internal
 .create_items_table <- function(con) {
-  # NOTE: there is a `categories` array entry in the CSL schema
-  #       - no idea what it is for
-  #       - can't find any documentation
-  #       - not included here for now
-  con |> DBI::dbExecute("CREATE TABLE items (
-                      item_id UUID NOT NULL,
-                      type VARCHAR,
-                      citation_key VARCHAR,
-                      language VARCHAR,
-                      accessed DATE,
-                      available_date DATE,
-                      event_date DATE,
-                      issued DATE,
-                      original_date DATE,
-                      submitted DATE,
-                      abstract VARCHAR,
-                      annote VARCHAR,
-                      archive VARCHAR,
-                      archive_collection VARCHAR,
-                      archive_location VARCHAR,
-                      archive_place VARCHAR,
-                      authority VARCHAR,
-                      call_number VARCHAR,
-                      chapter_number VARCHAR,
-                      citation_number VARCHAR,
-                      citation_label VARCHAR,
-                      collection_number VARCHAR,
-                      collection_title VARCHAR,
-                      container_title VARCHAR,
-                      container_title_short VARCHAR,
-                      dimensions VARCHAR,
-                      division VARCHAR,
-                      doi VARCHAR,
-                      edition VARCHAR,
-                      event_title VARCHAR,
-                      event_place VARCHAR,
-                      first_reference_note_number VARCHAR,
-                      genre VARCHAR,
-                      isbn VARCHAR,
-                      issn VARCHAR,
-                      issue VARCHAR,
-                      jurisdiction VARCHAR,
-                      keyword VARCHAR,
-                      locator VARCHAR,
-                      medium VARCHAR,
-                      note VARCHAR,
-                      number VARCHAR,
-                      number_of_pages VARCHAR,
-                      number_of_volumes VARCHAR,
-                      original_publisher VARCHAR,
-                      original_publisher_place VARCHAR,
-                      original_title VARCHAR,
-                      page VARCHAR,
-                      page_first VARCHAR,
-                      part VARCHAR,
-                      part_title VARCHAR,
-                      pmcid VARCHAR,
-                      pmid VARCHAR,
-                      printing VARCHAR,
-                      publisher VARCHAR,
-                      publisher_place VARCHAR,
-                      refers VARCHAR,
-                      reviewed_genre VARCHAR,
-                      reviewed_title VARCHAR,
-                      scale VARCHAR,
-                      section VARCHAR,
-                      source VARCHAR,
-                      status VARCHAR,
-                      supplement VARCHAR,
-                      title VARCHAR,
-                      title_short VARCHAR,
-                      url VARCHAR,
-                      version VARCHAR,
-                      volume VARCHAR,
-                      volume_title VARCHAR,
-                      volume_title_short VARCHAR,
-                      year_suffix VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (item_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("items")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$items <- .create_items_table
 
 
 #' Create issues table
 #'
-#' Creates the issues table for data quality problem tracking. See CLAUDE.md
-#' schema section for field descriptions.
+#' Creates the issues table for data quality problem tracking using SQL schema
+#' from inst/sql/common/issues.sql. See CLAUDE.md schema section for field
+#' descriptions.
 #'
 #' @param con Database connection
 #'
@@ -335,19 +179,8 @@ create_table_functions$items <- .create_items_table
 #'
 #' @keywords internal
 .create_issues_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE issues (
-                      issue_id UUID NOT NULL,
-                      status VARCHAR,
-                      object_type VARCHAR,
-                      object_id UUID,
-                      description VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (issue_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("issues")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$issues <- .create_issues_table
 
@@ -355,7 +188,8 @@ create_table_functions$issues <- .create_issues_table
 #' Create person_identifiers table
 #'
 #' Creates the person_identifiers table for external IDs of focal persons
-#' (ORCID, etc.). See CLAUDE.md schema section for field descriptions.
+#' (ORCID, etc.) using SQL schema from inst/sql/common/person_identifiers.sql.
+#' See CLAUDE.md schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -368,26 +202,16 @@ create_table_functions$issues <- .create_issues_table
 #'
 #' @keywords internal
 .create_person_identifiers_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE person_identifiers (
-                      person_identifier_id UUID NOT NULL,
-                      person_id UUID,
-                      id_type VARCHAR,
-                      id_value VARCHAR,
-                      id_value_uppercase VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (person_identifier_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("person_identifiers")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$person_identifiers <- .create_person_identifiers_table
 
 #' Create item_person_identifiers table
 #'
 #' Creates the item_person_identifiers table for external IDs of item creators
-#' (non-focal persons). See CLAUDE.md schema section for field descriptions.
+#' (non-focal persons) using SQL schema from inst/sql/common/item_person_identifiers.sql.
+#' See CLAUDE.md schema section for field descriptions.
 #'
 #' @param con Database connection
 #'
@@ -399,18 +223,8 @@ create_table_functions$person_identifiers <- .create_person_identifiers_table
 #'
 #' @keywords internal
 .create_item_person_identifiers_table <- function(con) {
-  con |> DBI::dbExecute("CREATE TABLE item_person_identifiers (
-                      item_person_identifier_id UUID NOT NULL,
-                      item_person_id UUID,
-                      id_type VARCHAR,
-                      id_value VARCHAR,
-                      revision INTEGER NOT NULL,
-                      stage INTEGER NOT NULL,
-                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
-                      PRIMARY KEY (item_person_identifier_id, revision),
-                      CHECK (stage IN (0, -1)),
-                      CHECK (revision >= 1)
-  )")
+  sql <- .read_schema_sql("item_person_identifiers")
+  con |> DBI::dbExecute(sql)
 }
 create_table_functions$item_person_identifiers <- .create_item_person_identifiers_table
 

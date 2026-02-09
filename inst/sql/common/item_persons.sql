@@ -1,0 +1,21 @@
+CREATE TABLE item_persons (
+  item_person_id UUID NOT NULL,
+  personlist_id UUID,
+  position INTEGER,
+  person_id UUID,
+  literal VARCHAR,
+  family VARCHAR,
+  given VARCHAR,
+  dropping_particle VARCHAR,
+  non_dropping_particle VARCHAR,
+  suffix VARCHAR,
+  comma_suffix BOOLEAN,
+  static_ordering BOOLEAN,
+  parse_names BOOLEAN,
+  revision INTEGER NOT NULL,
+  stage INTEGER NOT NULL,
+  created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+  PRIMARY KEY (item_person_id, revision),
+  CHECK (stage IN (0, -1)),
+  CHECK (revision >= 1)
+);
