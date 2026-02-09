@@ -784,6 +784,7 @@ EMPTY_FIND_RESULT <- tibble::tibble(item_id = character(0),
     tryCatch({
       search_table <- dplyr::tbl(con, glue::glue("{object_type}s"))
       found <- search_table |>
+        # this join is what generates the "by = join_by(whatever)" messages
         dplyr::inner_join(tibble::as_tibble(object_data), copy=TRUE) |>
         dplyr::collect()
     }, finally = {
