@@ -186,13 +186,13 @@ Prefixed with `.` - used internally but not exported:
 
 **Problem**: `max()` on empty vector returns `-Inf`.
 
-**Solution**: Always check `length(revisions) > 0` before calling `max()` (R/interface.R:42-54).
+**Solution**: Always check `length(revisions) > 0` before calling `max()` (R/interface.R:95-107). Code now includes check and throws error if object not found.
 
 ### Race Condition in Updates
 
 **Problem**: If new revision inserted before old one destaged, two active revisions exist.
 
-**Solution**: In `.update_object()`, call `.destage_one()` BEFORE `.insert_one()` (R/interface.R:90-92).
+**Solution**: In `.update_object()`, call `.destage_one()` BEFORE `.insert_one()` (R/interface.R:191-206). Code correctly destages old revision first within a transaction.
 
 ### Variable Shadowing in dplyr Pipes
 
@@ -206,7 +206,7 @@ Functions use `revision` parameter, not `rev` (though R's partial matching may h
 
 ## Testing Strategy
 
-- 1193 tests across 5 test files
+- 2344 tests across 5 test files
 - Tests run against both SQLite and DuckDB backends
 - Tests organized by component: augmentors, create_tables, helper, interface, validators
 - Always run full test suite after fixing bugs: `devtools::test()`
