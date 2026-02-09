@@ -222,6 +222,13 @@ Nine core tables with revision tracking:
 
 All tables include: `revision`, `stage`, `created` timestamp.
 
+**Database Constraints**: All tables have database-level constraints for data
+integrity including primary keys, NOT NULL constraints, and CHECK constraints on
+`stage` and `revision` values. The revision tracking design (multiple revisions
+per object) prevents traditional foreign key constraints - referential integrity
+is enforced at the application level. See `CLAUDE.md` for complete constraint
+specifications.
+
 ## Advanced Usage
 
 ### Custom Validators and Augmentors

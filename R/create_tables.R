@@ -19,7 +19,7 @@ create_table_functions <- list()
 #' @keywords internal
 .create_persons_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE persons (
-                      person_id UUID,
+                      person_id UUID NOT NULL,
                       primary_person_id UUID,
                       also_known_as BOOLEAN,
                       primary_given_names VARCHAR,
@@ -40,9 +40,17 @@ create_table_functions <- list()
                       objective_pronoun VARCHAR,
                       possessive_pronoun VARCHAR,
                       status VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (person_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1),
+                      CHECK (
+                        (primary_given_names IS NOT NULL AND primary_given_names != '') OR
+                        (other_given_names IS NOT NULL AND other_given_names != '') OR
+                        (surnames IS NOT NULL AND surnames != '')
+                      )
   )")
 }
 create_table_functions$persons <- .create_persons_table
@@ -65,7 +73,7 @@ create_table_functions$persons <- .create_persons_table
 #' @keywords internal
 .create_person_roles_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE person_roles (
-                      person_role_id UUID,
+                      person_role_id UUID NOT NULL,
                       person_id UUID,
                       position VARCHAR,
                       superorganization VARCHAR,
@@ -84,10 +92,14 @@ create_table_functions$persons <- .create_persons_table
                       start_day INTEGER,
                       end_day INTEGER,
                       order_priority INTEGER,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (person_role_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
+
 }
 create_table_functions$person_roles <- .create_person_roles_table
 
@@ -110,7 +122,7 @@ create_table_functions$person_roles <- .create_person_roles_table
 #' @keywords internal
 .create_item_persons_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE item_persons (
-                      item_person_id UUID,
+                      item_person_id UUID NOT NULL,
                       personlist_id UUID,
                       position INTEGER,
                       person_id UUID,
@@ -123,9 +135,12 @@ create_table_functions$person_roles <- .create_person_roles_table
                       comma_suffix BOOLEAN,
                       static_ordering BOOLEAN,
                       parse_names BOOLEAN,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (item_person_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$item_persons <- .create_item_persons_table
@@ -147,12 +162,22 @@ create_table_functions$item_persons <- .create_item_persons_table
 #' @keywords internal
 .create_personlists_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE personlists (
-                      personlist_id UUID,
+                      personlist_id UUID NOT NULL,
                       item_id UUID,
                       personlist_type VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (personlist_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1),
+                      CHECK (personlist_type IN (
+                        'author', 'editor', 'translator', 'director', 'performer', 'chair',
+                        'organizer', 'collection-editor', 'compiler', 'composer', 'container-author',
+                        'contributor', 'curator', 'editorial-director', 'executive-producer',
+                        'guest', 'host', 'interviewer', 'illustrator', 'narrator', 'original-author',
+                        'producer', 'recipient', 'reviewed-author', 'script-writer', 'series-creator'
+                      ))
   )")
 }
 create_table_functions$personlists <- .create_personlists_table
@@ -174,13 +199,16 @@ create_table_functions$personlists <- .create_personlists_table
 #' @keywords internal
 .create_affiliation_references_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE affiliation_references (
-                      affiliation_reference_id UUID,
+                      affiliation_reference_id UUID NOT NULL,
                       item_person_id UUID,
                       position INTEGER,
                       affiliation VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (affiliation_reference_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$affiliation_references <- .create_affiliation_references_table
@@ -208,7 +236,7 @@ create_table_functions$affiliation_references <- .create_affiliation_references_
   #       - can't find any documentation
   #       - not included here for now
   con |> DBI::dbExecute("CREATE TABLE items (
-                      item_id UUID,
+                      item_id UUID NOT NULL,
                       type VARCHAR,
                       citation_key VARCHAR,
                       language VARCHAR,
@@ -280,9 +308,12 @@ create_table_functions$affiliation_references <- .create_affiliation_references_
                       volume_title VARCHAR,
                       volume_title_short VARCHAR,
                       year_suffix VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (item_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$items <- .create_items_table
@@ -305,14 +336,17 @@ create_table_functions$items <- .create_items_table
 #' @keywords internal
 .create_issues_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE issues (
-                      issue_id UUID,
+                      issue_id UUID NOT NULL,
                       status VARCHAR,
                       object_type VARCHAR,
                       object_id UUID,
                       description VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (issue_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$issues <- .create_issues_table
@@ -335,14 +369,17 @@ create_table_functions$issues <- .create_issues_table
 #' @keywords internal
 .create_person_identifiers_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE person_identifiers (
-                      person_identifier_id UUID,
+                      person_identifier_id UUID NOT NULL,
                       person_id UUID,
                       id_type VARCHAR,
                       id_value VARCHAR,
                       id_value_uppercase VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (person_identifier_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$person_identifiers <- .create_person_identifiers_table
@@ -363,13 +400,16 @@ create_table_functions$person_identifiers <- .create_person_identifiers_table
 #' @keywords internal
 .create_item_person_identifiers_table <- function(con) {
   con |> DBI::dbExecute("CREATE TABLE item_person_identifiers (
-                      item_person_identifier_id UUID,
+                      item_person_identifier_id UUID NOT NULL,
                       item_person_id UUID,
                       id_type VARCHAR,
                       id_value VARCHAR,
-                      revision INTEGER,
-                      stage INTEGER,
-                      created TIMESTAMP DEFAULT current_timestamp
+                      revision INTEGER NOT NULL,
+                      stage INTEGER NOT NULL,
+                      created TIMESTAMP DEFAULT current_timestamp NOT NULL,
+                      PRIMARY KEY (item_person_identifier_id, revision),
+                      CHECK (stage IN (0, -1)),
+                      CHECK (revision >= 1)
   )")
 }
 create_table_functions$item_person_identifiers <- .create_item_person_identifiers_table

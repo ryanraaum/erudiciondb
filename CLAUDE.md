@@ -8,7 +8,20 @@ ErudicionDB is an R package providing a database schema and toolkit for storing,
 
 ## Development Commands
 
+### Project Rules & Configuration
+
+- **Environment**: Windows
+- **R Executable Path**: `C:\\PROGRA~1\\R\\R-44~1.1\\bin\\Rscript.exe` (Use short path names to avoid spaces issues, or use forward slashes/escaped backslashes)
+- **Test Command**: Always use `devtools::test()` to run tests.
+- **Run Tests Procedure**: To run tests, execute the following command in the terminal:
+  `"C:\\PROGRA~1\\R\\R-44~1.1\\bin\\Rscript.exe" -e "devtools::test()"`
+
+#### Rules
+- When asked to run tests, do NOT use just `R` or `devtools::test()`. Use the full path defined above.
+- If tests fail, analyze the output and fix the code.
+
 ### Load and Test
+
 ```r
 # Load package for development
 devtools::load_all()
@@ -48,6 +61,26 @@ Nine core tables, all with `revision` (integer), `stage` (0=active, -1=inactive)
 - **`affiliation_references`**: Affiliations for item creators
 - **`item_person_identifiers`**: IDs for non-focal item creators
 - **`issues`**: Data quality problem tracking
+
+### Database Constraints
+
+All 9 tables have the following database-level constraints for data integrity:
+
+**Universal Constraints (All Tables)**
+- `PRIMARY KEY (object_id, revision)` - Ensures uniqueness of each revision
+- `NOT NULL` on `object_id`, `revision`, `stage`, `created` - Required fields
+- `CHECK (stage IN (0, -1))` - Enforces valid stage values
+- `CHECK (revision >= 1)` - Ensures positive revision numbers
+
+**Table-Specific Constraints**
+- **persons**: `CHECK` constraint requiring at least one name field (primary_given_names, other_given_names, or surnames) to be present
+- **personlists**: `CHECK` constraint on `personlist_type` limiting to 24 valid CSL creator types (author, editor, translator, etc.)
+
+**Important Design Notes**
+- **No UNIQUE constraint on object_id**: This would prevent multiple revisions of the same object. The revision tracking system allows multiple rows with the same object_id but different revision numbers.
+- **No UNIQUE constraint on citation_key**: This would prevent updating items while keeping the same citation key. Application-level validation prevents duplicate active citation keys.
+- **No foreign key constraints**: Child tables (personlists, item_persons, etc.) store parent object_ids without database-level FK constraints. The revision tracking design makes FK enforcement complex, as child records reference object_ids without revision numbers. Referential integrity is enforced at the application level.
+- **DuckDB limitation**: DuckDB does not support partial indexes (`WHERE` clauses on indexes). For SQLite, consider adding partial unique indexes manually: `CREATE UNIQUE INDEX idx_{table}_active_revision ON {table}(object_id) WHERE stage = 0` to prevent two active revisions of the same object at the database level.
 
 ### Code Organization
 
