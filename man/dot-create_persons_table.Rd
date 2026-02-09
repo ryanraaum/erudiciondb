@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the persons table for focal scholars. See CLAUDE.md schema section
-for field descriptions.
+Creates the persons table for focal scholars using SQL schema from
+inst/sql/common/persons.sql. See CLAUDE.md schema section for field
+descriptions.
 }
 \details{
 Core fields: person_id (UUID), name components (primary/other given names,

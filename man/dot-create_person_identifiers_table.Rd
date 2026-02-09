@@ -14,7 +14,8 @@ Number of rows affected (invisible)
 }
 \description{
 Creates the person_identifiers table for external IDs of focal persons
-(ORCID, etc.). See CLAUDE.md schema section for field descriptions.
+(ORCID, etc.) using SQL schema from inst/sql/common/person_identifiers.sql.
+See CLAUDE.md schema section for field descriptions.
 }
 \details{
 Links focal persons to external identifier systems. Fields: person_id,

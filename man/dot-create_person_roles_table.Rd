@@ -14,7 +14,8 @@ Number of rows affected (invisible)
 }
 \description{
 Creates the person_roles table for tracking career history and affiliations
-of focal persons. See CLAUDE.md schema section for field descriptions.
+of focal persons using SQL schema from inst/sql/common/person_roles.sql.
+See CLAUDE.md schema section for field descriptions.
 }
 \details{
 Tracks position/affiliation over time with organizational hierarchy

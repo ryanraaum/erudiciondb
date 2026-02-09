@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the issues table for data quality problem tracking. See CLAUDE.md
-schema section for field descriptions.
+Creates the issues table for data quality problem tracking using SQL schema
+from inst/sql/common/issues.sql. See CLAUDE.md schema section for field
+descriptions.
 }
 \details{
 Tracks data quality problems (e.g., ambiguous person matches, missing data).

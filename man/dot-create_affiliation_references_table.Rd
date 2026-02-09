@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the affiliation_references table for affiliations of item creators.
-See CLAUDE.md schema section for field descriptions.
+Creates the affiliation_references table for affiliations of item creators
+using SQL schema from inst/sql/common/affiliation_references.sql. See
+CLAUDE.md schema section for field descriptions.
 }
 \details{
 Stores institutional affiliations for item_persons (creators from imported

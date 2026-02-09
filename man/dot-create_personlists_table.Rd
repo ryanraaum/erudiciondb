@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the personlists table linking items to their item_persons by role type.
-See CLAUDE.md schema section for field descriptions.
+Creates the personlists table linking items to their item_persons by role type
+using SQL schema from inst/sql/common/personlists.sql. See CLAUDE.md schema
+section for field descriptions.
 }
 \details{
 Junction table with personlist_type (author, editor, translator, etc. from

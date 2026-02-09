@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the items table for bibliography/citation records. CSL-compliant with
-~70 fields. See CLAUDE.md schema section for field descriptions.
+Creates the items table for bibliography/citation records using SQL schema
+from inst/sql/common/items.sql. CSL-compliant with ~70 fields. See CLAUDE.md
+schema section for field descriptions.
 }
 \details{
 Full CSL data item schema with snake_case field names. Includes identifiers

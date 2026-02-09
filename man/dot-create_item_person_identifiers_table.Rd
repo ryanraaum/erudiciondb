@@ -14,7 +14,8 @@ Number of rows affected (invisible)
 }
 \description{
 Creates the item_person_identifiers table for external IDs of item creators
-(non-focal persons). See CLAUDE.md schema section for field descriptions.
+(non-focal persons) using SQL schema from inst/sql/common/item_person_identifiers.sql.
+See CLAUDE.md schema section for field descriptions.
 }
 \details{
 Links item_persons to external identifier systems (e.g., ORCID from imported

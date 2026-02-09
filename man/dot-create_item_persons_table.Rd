@@ -13,8 +13,9 @@
 Number of rows affected (invisible)
 }
 \description{
-Creates the item_persons table for creators/contributors from imported items.
-CSL-compliant schema. See CLAUDE.md schema section for field descriptions.
+Creates the item_persons table for creators/contributors from imported items
+using SQL schema from inst/sql/common/item_persons.sql. CSL-compliant schema.
+See CLAUDE.md schema section for field descriptions.
 }
 \details{
 Stores creator data in CSL format with optional person_id link to focal persons.
